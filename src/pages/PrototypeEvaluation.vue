@@ -32,111 +32,135 @@
     </div>
 
     <!-- Prototype Section -->
-    <div v-if="currentClass && currentReviewer">
-      <div class="text-h5 q-mb-md">ECG Prototypes</div>
+    <div v-if="currentClass && currentReviewer" class="row">
+      <!-- Side Navigation Menu -->
+      <div class="col-md-2 col-sm-3 gt-xs">
+        <div class="prototype-nav">
+          <q-list bordered separator class="rounded-borders">
+            <q-item 
+              v-for="(prototype, index) in currentPrototypes" 
+              :key="`nav-${prototype.id}`"
+              clickable
+              v-ripple
+              @click="scrollToPrototype(index)"
+              :active="currentPrototypeIndex === index"
+              active-class="bg-primary text-white"
+            >
+              <q-item-section>
+                Prototype {{ index + 1 }}
+              </q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+      </div>
       
       <!-- Integrated Prototype Cards with Ratings -->
-      <div class="row q-col-gutter-lg">
-        <div 
-          v-for="(prototype, index) in currentPrototypes" 
-          :key="prototype.id" 
-          class="col-12"
-        >
-          <q-card class="prototype-card q-mb-lg">
-            <q-card-section class="bg-primary text-white">
-              <div class="text-h6">Prototype {{ index + 1 }}</div>
-              <div class="text-subtitle2">{{ prototype.diagnosticClass }}</div>
-            </q-card-section>
-            
-            <!-- Prototype Image Section -->
-            <q-card-section>
-              <div class="text-subtitle2 q-mb-sm">{{ prototype.description }}</div>
-              <div class="ecg-display">
-                <q-img 
-                  :src="prototype.imageUrl" 
-                  alt="ECG Prototype" 
-                  :ratio="16/9"
-                  spinner-color="primary"
-                  spinner-size="82px"
-                  fit="contain"
-                  class="rounded-borders"
-                  @error="handleImageError"
-                >
-                  <template v-slot:error>
-                    <div class="absolute-full flex flex-center bg-grey-3">
-                      <div class="text-h6 text-grey-8">Error loading ECG image</div>
-                    </div>
-                  </template>
-                </q-img>
-              </div>
-            </q-card-section>
-            
-            <!-- Select Best Button -->
-            <q-card-section>
-              <q-btn
-                :color="isPrototypeSelected(index) ? 'positive' : 'primary'"
-                :outline="!isPrototypeSelected(index)"
-                :icon="isPrototypeSelected(index) ? 'check_circle' : 'radio_button_unchecked'"
-                :label="isPrototypeSelected(index) ? 'Selected as Best Prototype' : 'Select as Best Prototype'"
-                @click="toggleBestPrototype(index)"
-              />
-            </q-card-section>
-            
-            <!-- Rating Section -->
-            <q-separator />
-            
-            <q-card-section>
-              <div class="text-subtitle1 text-weight-bold q-mb-md">Rate this prototype:</div>
+      <div class="col-md-9 col-sm-8 col-xs-12 offset-md-1 offset-sm-1">
+        <div class="text-h5 q-mb-md">ECG Prototypes</div>
+        <div class="row q-col-gutter-lg">
+          <div 
+            v-for="(prototype, index) in currentPrototypes" 
+            :key="prototype.id" 
+            class="col-12"
+            :ref="el => { if (el) prototypeRefs[index] = el }"
+            :id="`prototype-${index}`"
+          >
+            <q-card class="prototype-card q-mb-lg">
+              <q-card-section class="bg-primary text-white">
+                <div class="text-h6">Prototype {{ index + 1 }}</div>
+                <div class="text-subtitle2">{{ prototype.diagnosticClass }}</div>
+              </q-card-section>
               
-              <div v-for="(criterion, key) in ratingCriteria" :key="`${prototype.id}-${key}`" class="q-mb-lg">
-                <div class="text-subtitle2 q-mb-sm">{{ criterion.label }}</div>
-                <div class="text-caption q-mb-md">{{ criterion.description }}</div>
+              <!-- Prototype Image Section -->
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">{{ prototype.description }}</div>
+                <div class="ecg-display">
+                  <q-img 
+                    :src="prototype.imageUrl" 
+                    alt="ECG Prototype" 
+                    :ratio="16/9"
+                    spinner-color="primary"
+                    spinner-size="82px"
+                    fit="contain"
+                    class="rounded-borders"
+                    @error="handleImageError"
+                  >
+                    <template v-slot:error>
+                      <div class="absolute-full flex flex-center bg-grey-3">
+                        <div class="text-h6 text-grey-8">Error loading ECG image</div>
+                      </div>
+                    </template>
+                  </q-img>
+                </div>
+              </q-card-section>
+              
+              <!-- Select Best Button -->
+              <q-card-section>
+                <q-btn
+                  :color="isPrototypeSelected(index) ? 'positive' : 'primary'"
+                  :outline="!isPrototypeSelected(index)"
+                  :icon="isPrototypeSelected(index) ? 'check_circle' : 'radio_button_unchecked'"
+                  :label="isPrototypeSelected(index) ? 'Selected as Best Prototype' : 'Select as Best Prototype'"
+                  @click="toggleBestPrototype(index)"
+                />
+              </q-card-section>
+              
+              <!-- Rating Section -->
+              <q-separator />
+              
+              <q-card-section>
+                <div class="text-subtitle1 text-weight-bold q-mb-md">Rate this prototype:</div>
                 
-                <div class="rating-wrapper q-px-xl q-py-sm">
-                  <q-slider
-                    v-model="prototypeRatings[prototype.id][key]"
-                    :min="1"
-                    :max="5"
-                    :step="1"
-                    label
-                    label-always
-                    markers
-                    marker-labels
-                    :marker-labels-class="markerClass"
-                    :color="getRatingColor(prototypeRatings[prototype.id][key])"
-                    @change="updateRating(prototype.id)"
-                    switch-label-side
-                    class="q-mt-lg"
-                  />
+                <div v-for="(criterion, key) in ratingCriteria" :key="`${prototype.id}-${key}`" class="q-mb-lg">
+                  <div class="text-subtitle2 q-mb-sm">{{ criterion.label }}</div>
+                  <div class="text-caption q-mb-md">{{ criterion.description }}</div>
                   
-                  <div class="rating-labels-container">
-                    <div class="rating-label" v-for="n in 5" :key="n">
-                      <div class="label-text">{{ getRatingLabel(n) }}</div>
+                  <div class="rating-wrapper q-px-xl q-py-sm">
+                    <q-slider
+                      v-model="prototypeRatings[prototype.id][key]"
+                      :min="1"
+                      :max="5"
+                      :step="1"
+                      label
+                      label-always
+                      markers
+                      marker-labels
+                      :marker-labels-class="markerClass"
+                      :color="getRatingColor(prototypeRatings[prototype.id][key])"
+                      @change="updateRating(prototype.id)"
+                      switch-label-side
+                      class="q-mt-lg"
+                    />
+                    
+                    <div class="rating-labels-container">
+                      <div class="rating-label" v-for="n in 5" :key="n">
+                        <div class="label-text">{{ getRatingLabel(n) }}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              
-              <!-- Comments section for individual prototype -->
-              <div class="q-mt-lg">
-                <div class="text-subtitle2 q-mb-sm">Additional Comments</div>
-                <q-input
-                  v-model="prototypeComments[prototype.id]"
-                  type="textarea"
-                  label="Comments about this prototype"
-                  outlined
-                  autogrow
-                  rows="3"
-                  @update:model-value="updateComments(prototype.id)"
-                />
-              </div>
-            </q-card-section>
-          </q-card>
+                
+                <!-- Comments section for individual prototype -->
+                <div class="q-mt-lg">
+                  <div class="text-subtitle2 q-mb-sm">Additional Comments</div>
+                  <q-input
+                    v-model="prototypeComments[prototype.id]"
+                    type="textarea"
+                    label="Comments about this prototype"
+                    outlined
+                    autogrow
+                    rows="3"
+                    @update:model-value="updateComments(prototype.id)"
+                  />
+                </div>
+              </q-card-section>
+            </q-card>
+          </div>
         </div>
       </div>
 
-      <!-- Submit Section -->
-      <div class="row justify-end q-mt-lg q-mb-xl">
+      <!-- Submit Button (Desktop and Mobile) -->
+      <div class="row justify-end q-mt-lg q-mb-xl col-12">
         <q-btn
           color="primary"
           label="Submit Evaluation"
@@ -144,6 +168,7 @@
           :disable="!isFormValid"
           @click="submitEvaluation"
           size="lg"
+          class="q-mb-xl"
         />
       </div>
     </div>
@@ -502,12 +527,65 @@ const markerClass = val => {
   return 'text-weight-bold'
 }
 
+// Store refs to prototype cards for scrolling
+const prototypeRefs = ref([])
+const currentPrototypeIndex = ref(0)
+
+// Method to scroll to a prototype
+const scrollToPrototype = (index) => {
+  const element = prototypeRefs.value[index]
+  if (element) {
+    currentPrototypeIndex.value = index
+    
+    // Calculate header offset (50px for the header)
+    const headerOffset = 50
+    
+    // Get the element's position relative to the viewport
+    const elementPosition = element.getBoundingClientRect().top
+    
+    // Calculate the absolute position and adjust for header
+    const offsetPosition = window.pageYOffset + elementPosition - headerOffset
+    
+    // Scroll to the adjusted position
+    window.scrollTo({
+      top: offsetPosition,
+      behavior: 'smooth'
+    })
+  }
+}
+
+// Watch window scroll to update active prototype in the nav
 onMounted(() => {
   // Set default diagnostic class
   if (diagnosticClasses.value.length > 0) {
     currentClass.value = diagnosticClasses.value[0]
   }
+  
+  // Add scroll event listener to track current prototype
+  window.addEventListener('scroll', updateCurrentPrototype)
 })
+
+// Clean up the event listener when component is unmounted
+const beforeUnmount = () => {
+  window.removeEventListener('scroll', updateCurrentPrototype)
+}
+
+// Update the active prototype based on scroll position
+const updateCurrentPrototype = () => {
+  if (prototypeRefs.value.length === 0) return
+  
+  // Find the prototype closest to the top of the viewport
+  const scrollPosition = window.scrollY + 100 // Add offset to improve accuracy
+  
+  for (let i = 0; i < prototypeRefs.value.length; i++) {
+    const element = prototypeRefs.value[i]
+    const elementPosition = element.getBoundingClientRect().top + window.scrollY
+    
+    if (scrollPosition >= elementPosition) {
+      currentPrototypeIndex.value = i
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -523,6 +601,13 @@ onMounted(() => {
 .ecg-display {
   background-color: #f5f5f5;
   border-radius: 4px;
+}
+
+.prototype-nav {
+  position: sticky;
+  top: 70px; /* Adjusted to account for header (50px) + some padding (20px) */
+  z-index: 1;
+  margin-top: 45px; /* Added to align with the first prototype after the heading */
 }
 
 .rating-wrapper {
