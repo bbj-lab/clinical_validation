@@ -24,7 +24,15 @@
       </div>
     </div>
 
-    <div v-if="currentClass && currentReviewer">
+    <!-- Debug info -->
+    <div class="q-mb-md text-caption">
+      Has reviewer: {{ !!currentReviewer }}, 
+      Has class: {{ !!currentClass }}, 
+      Prototypes length: {{ currentPrototypes.length }}
+    </div>
+
+    <!-- Removing the v-if condition temporarily -->
+    <div>
       <!-- Prototype Display Section -->
       <div class="q-mb-xl">
         <div class="text-h5 q-mb-md">Prototype Comparison</div>
@@ -36,7 +44,7 @@
       </div>
 
       <!-- Rating Form Section -->
-      <div class="q-mb-xl">
+      <div class="q-mb-xl" v-if="currentClass && currentReviewer">
         <div class="text-h5 q-mb-md">Prototype Ratings</div>
         <rating-form
           @update:ratings="handleRatingsUpdate"
@@ -44,7 +52,7 @@
       </div>
 
       <!-- Submit Section -->
-      <div class="row justify-end q-mt-lg">
+      <div class="row justify-end q-mt-lg" v-if="currentClass && currentReviewer">
         <q-btn
           color="primary"
           label="Submit Evaluation"
@@ -55,7 +63,7 @@
       </div>
     </div>
 
-    <div v-else class="text-center q-pa-xl">
+    <div v-if="!currentClass || !currentReviewer" class="text-center q-pa-xl">
       <div class="text-h6 q-mb-md text-grey-7">Please select both a reviewer and diagnostic class to begin evaluation</div>
     </div>
 
@@ -171,10 +179,13 @@ export default {
     const ratings = ref({})
     const showError = ref(false)
     const showSuccess = ref(false)
+    
+    // Make mockPrototypes available as reactive state
+    const prototypesData = ref(mockPrototypes)
 
     const reviewerOptions = [
-      { label: 'Internist', value: 'internist' },
-      { label: 'Cardiologist', value: 'cardiologist' }
+      { label: 'Bashar Ramadan', value: 'Bashar Ramadan' },
+      { label: 'Nipun Bhandari', value: 'Nipun Bhandari' }
     ]
 
     const diagnosticClasses = ref(Object.keys(mockPrototypes))
@@ -194,8 +205,17 @@ export default {
     })
 
     const currentPrototypes = computed(() => {
-      if (!currentClass.value) return []
-      return mockPrototypes[currentClass.value] || []
+      console.log('Computing currentPrototypes - currentClass:', currentClass.value);
+      console.log('Prototypes available keys:', Object.keys(prototypesData.value));
+      
+      if (!currentClass.value) {
+        console.log('No current class selected, returning empty array');
+        return [];
+      }
+      
+      const result = prototypesData.value[currentClass.value] || [];
+      console.log('Returning prototypes:', result);
+      return result;
     })
 
     const isFormValid = computed(() => {
@@ -211,13 +231,17 @@ export default {
     }
 
     const handleClassChange = (className) => {
-      // Load prototypes for the selected class
-      store.setCurrentPrototypes(mockPrototypes[className] || [])
+      console.log('Class changed to:', className);
+      console.log('Available prototypes for this class:', prototypesData.value[className.value]);
+      
+      // Set the current class (this should trigger the computed property)
+      // className is an object with label and value properties
+      currentClass.value = className.value;
       
       // Reset the form
-      bestPrototypes.value = []
-      noSignificantDifference.value = false
-      ratings.value = {}
+      bestPrototypes.value = [];
+      noSignificantDifference.value = false;
+      ratings.value = {};
     }
 
     const handleBestPrototypesUpdate = (selected) => {
@@ -264,7 +288,8 @@ export default {
       // Set default diagnostic class
       if (diagnosticClasses.value.length > 0) {
         currentClass.value = diagnosticClasses.value[0]
-        store.setCurrentPrototypes(mockPrototypes[currentClass.value])
+        // Log initial loading
+        console.log('Initial load - class:', currentClass.value, 'prototypes:', currentPrototypes.value)
       }
     })
 
@@ -274,6 +299,7 @@ export default {
       currentClass,
       diagnosticClassOptions,
       currentPrototypes,
+      prototypesData,
       isLoading: computed(() => store.isLoading),
       error: computed(() => store.error),
       showError,

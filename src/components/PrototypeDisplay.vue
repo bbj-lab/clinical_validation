@@ -64,7 +64,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export default {
   name: 'PrototypeDisplay',
@@ -84,6 +84,14 @@ export default {
     const noSignificantDifference = ref(false)
 
     const selectedCount = computed(() => selectedPrototypes.value.size)
+
+    // Log when props change
+    console.log('PrototypeDisplay setup with props:', props.prototypes)
+    
+    // Watch for props changes
+    watch(() => props.prototypes, (newVal) => {
+      console.log('PrototypeDisplay props.prototypes changed:', newVal)
+    }, { deep: true })
 
     const isSelected = (index) => selectedPrototypes.value.has(index)
 
