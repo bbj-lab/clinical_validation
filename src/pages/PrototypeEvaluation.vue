@@ -210,7 +210,8 @@
                 <q-input
                   v-model="generalFeedback"
                   type="textarea"
-                  label="Comments about prototype redundancy"
+                  label="List any prototypes that you felt were redundant with each other"
+                  hint="Ex: 1-3, 2-4-5"
                   outlined
                   autogrow
                   rows="4"
