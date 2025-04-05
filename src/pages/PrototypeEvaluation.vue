@@ -232,22 +232,26 @@
         <q-btn
           v-else
           color="positive"
-          label="Download Results"
+          label="Download Complete Results"
           :loading="isLoading"
           @click="downloadAllResults"
           size="lg"
           class="q-mb-xl"
         />
         
-        <!-- Debug Download Button (Remove in Production) -->
+        <!-- Progress Download Button -->
         <q-btn
-          color="grey"
-          label="Debug Download"
+          color="grey-7"
+          label="Download Current Progress"
           :loading="isLoading"
           @click="downloadAllResults"
           size="lg"
           class="q-mb-xl q-ml-md"
-        />
+        >
+          <q-tooltip>
+            You can download your progress at any time, but please only email the final file when all classes are completed
+          </q-tooltip>
+        </q-btn>
       </div>
     </div>
 
@@ -667,7 +671,10 @@ onMounted(() => {
   // Extract the reviewer code from the URL
   const userCode = route.query.user
   
-  if (userCode && /^\d{6}$/.test(userCode)) {
+  // Only accept the two specific codes
+  const validCodes = ['351612', '165113']
+  
+  if (userCode && validCodes.includes(userCode)) {
     // Set current reviewer from URL parameter
     currentReviewer.value = `Reviewer-${userCode}`
     
@@ -677,28 +684,34 @@ onMounted(() => {
       const savedData = localStorage.getItem(savedKey)
       if (savedData) {
         const parsed = JSON.parse(savedData)
-        evaluationResults.value = parsed.evaluations || {}
-        completedClasses.value = parsed.completedClasses || []
         
-        // Check if all classes are completed
-        isAllClassesCompleted.value = checkAllClassesCompleted()
-        
-        // If we have at least one completed class, show a notification
-        if (completedClasses.value.length > 0) {
-          $q.notify({
-            type: 'positive',
-            message: `Loaded your saved progress (${completedClasses.value.length} classes completed)`,
-            position: 'top',
-            timeout: 3000
-          })
+        // Only restore data if it belongs to the current user
+        if (parsed.reviewer === currentReviewer.value) {
+          evaluationResults.value = parsed.evaluations || {}
+          completedClasses.value = parsed.completedClasses || []
           
-          // Set current class to first incomplete class
-          const firstIncompleteClass = diagnosticClasses.value.find(
-            classItem => !completedClasses.value.includes(classItem)
-          )
-          if (firstIncompleteClass) {
-            currentClass.value = firstIncompleteClass
+          // Check if all classes are completed
+          isAllClassesCompleted.value = checkAllClassesCompleted()
+          
+          // If we have at least one completed class, show a notification
+          if (completedClasses.value.length > 0) {
+            $q.notify({
+              type: 'positive',
+              message: `Loaded your saved progress (${completedClasses.value.length} classes completed)`,
+              position: 'top',
+              timeout: 3000
+            })
+            
+            // Set current class to first incomplete class
+            const firstIncompleteClass = diagnosticClasses.value.find(
+              classItem => !completedClasses.value.includes(classItem)
+            )
+            if (firstIncompleteClass) {
+              currentClass.value = firstIncompleteClass
+            }
           }
+        } else {
+          console.warn('Found saved data but for a different user')
         }
       }
     } catch (err) {
@@ -707,8 +720,8 @@ onMounted(() => {
   } else {
     // If no valid code is found, show a notification
     $q.notify({
-      type: 'warning',
-      message: 'No valid reviewer code provided. Please use a valid URL with a 6-digit reviewer code.',
+      type: 'negative',
+      message: 'Invalid reviewer code. Please use a valid URL with an authorized reviewer code.',
       position: 'top',
       timeout: 5000
     })
@@ -729,6 +742,7 @@ const saveToLocalStorage = () => {
   
   const savedKey = `ecg-eval-${currentReviewer.value}`
   const dataToSave = {
+    reviewer: currentReviewer.value,
     evaluations: evaluationResults.value,
     completedClasses: completedClasses.value,
     lastUpdated: new Date().toISOString()
@@ -839,19 +853,26 @@ const saveCurrentEvaluation = () => {
 
 const downloadAllResults = () => {
   try {
+    // Ensure we have a valid reviewer
+    if (!currentReviewer.value) {
+      throw new Error('No valid reviewer found')
+    }
+    
     // Prepare the complete results object
     const completeResults = {
       reviewer: currentReviewer.value,
       timestamp: new Date().toISOString(),
       classesEvaluated: completedClasses.value,
       totalClasses: diagnosticClasses.value.length,
+      completionStatus: isAllClassesCompleted.value ? 'complete' : 'in-progress',
       evaluations: evaluationResults.value
     }
     
-    // Format the filename
+    // Format the filename - include completion status
     const reviewer = currentReviewer.value.replace(/\s+/g, '-').toLowerCase()
     const date = new Date().toISOString().split('T')[0]
-    const filename = `ecg-evaluation-all-classes-${reviewer}-${date}.json`
+    const status = isAllClassesCompleted.value ? 'complete' : 'in-progress'
+    const filename = `ecg-evaluation-${status}-${reviewer}-${date}.json`
     
     // Create JSON string with proper formatting
     const jsonString = JSON.stringify(completeResults, null, 2)
@@ -872,17 +893,32 @@ const downloadAllResults = () => {
     window.URL.revokeObjectURL(url)
     document.body.removeChild(a)
     
-    // Show success notification
-    successMessage.value = 'All evaluation data downloaded successfully!'
-    showSuccess.value = true
-    
-    $q.notify({
-      type: 'positive',
-      message: 'Evaluation data downloaded successfully!',
-      icon: 'cloud_download',
-      position: 'top',
-      timeout: 3000
-    })
+    // Show appropriate notification based on completion status
+    if (isAllClassesCompleted.value) {
+      // Complete evaluation notification
+      successMessage.value = 'Complete evaluation data downloaded successfully!'
+      showSuccess.value = true
+      
+      $q.notify({
+        type: 'positive',
+        message: 'Complete evaluation data downloaded! Please email this file to the research team.',
+        icon: 'check_circle',
+        position: 'top',
+        timeout: 5000
+      })
+    } else {
+      // In-progress notification
+      successMessage.value = 'Current progress downloaded successfully!'
+      showSuccess.value = true
+      
+      $q.notify({
+        type: 'info',
+        message: `Progress downloaded (${completedClasses.value.length}/${diagnosticClasses.value.length} classes completed). Please complete all classes before submitting.`,
+        icon: 'save',
+        position: 'top',
+        timeout: 5000
+      })
+    }
     
     return true
   } catch (e) {
