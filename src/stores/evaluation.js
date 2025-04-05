@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { Notify } from 'quasar'
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 
 // Define the store using the setup syntax
 export const useEvaluationStore = defineStore('evaluation', () => {
@@ -19,6 +20,27 @@ export const useEvaluationStore = defineStore('evaluation', () => {
 
   function setCurrentReviewer(reviewer) {
     currentReviewer.value = reviewer
+  }
+
+  // Extract reviewer code from URL
+  function extractReviewerCodeFromUrl() {
+    try {
+      // Get the current route using Vue Router's Composition API
+      const route = useRoute()
+      
+      // Get the user code from the route query parameters
+      const code = route.query.user
+      
+      // Validate the code (should be 6 digits)
+      if (code && /^\d{6}$/.test(code)) {
+        // Set the reviewer code as the currentReviewer
+        currentReviewer.value = `Reviewer-${code}`
+        return code
+      }
+    } catch (error) {
+      console.error('Error extracting reviewer code:', error)
+    }
+    return null
   }
 
   function addEvaluation(evaluation) {
@@ -122,6 +144,7 @@ export const useEvaluationStore = defineStore('evaluation', () => {
     addEvaluation,
     saveEvaluation,
     setDiagnosticClasses,
+    extractReviewerCodeFromUrl,
     
     // Getters
     getEvaluationsByReviewer,

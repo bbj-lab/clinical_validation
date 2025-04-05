@@ -6,15 +6,6 @@
     <div class="row q-col-gutter-md q-mb-lg">
       <div class="col-12 col-md-6">
         <q-select
-          v-model="currentReviewer"
-          :options="reviewerOptions"
-          label="Select Reviewer"
-          outlined
-          @update:model-value="handleReviewerChange"
-        />
-      </div>
-      <div class="col-12 col-md-6">
-        <q-select
           v-model="currentClass"
           :options="diagnosticClassOptions"
           label="Select Diagnostic Class"
@@ -26,7 +17,7 @@
 
     <!-- Debug info -->
     <div class="q-mb-md text-caption">
-      Has reviewer: {{ !!currentReviewer }}, 
+      Reviewer code: {{ currentReviewer || 'Not provided' }}, 
       Has class: {{ !!currentClass }}, 
       Prototypes length: {{ currentPrototypes.length }}
     </div>
@@ -75,22 +66,40 @@
               <q-card-section>
                 <div class="text-subtitle2 q-mb-sm">{{ prototype.description }}</div>
                 <div class="ecg-display">
-                  <q-img 
-                    :src="prototype.imageUrl" 
-                    alt="ECG Prototype" 
-                    :ratio="16/9"
-                    spinner-color="primary"
-                    spinner-size="82px"
-                    fit="contain"
-                    class="rounded-borders"
-                    @error="handleImageError"
+                  <q-carousel
+                    v-model="currentImageIndex[prototype.id]"
+                    :arrows="true"
+                    :autoplay="false"
+                    :infinite="false"
+                    :navigation="false"
+                    :transition-prev="slideTransition"
+                    :transition-next="slideTransition"
+                    control-color="black"
+                    @update:model-value="updateImageIndex(prototype.id)"
                   >
-                    <template v-slot:error>
-                      <div class="absolute-full flex flex-center bg-grey-3">
-                        <div class="text-h6 text-grey-8">Error loading ECG image</div>
-                      </div>
-                    </template>
-                  </q-img>
+                    <q-carousel-slide
+                      v-for="(image, imageIndex) in prototype.images"
+                      :key="`${prototype.id}-${imageIndex}`"
+                      :name="imageIndex"
+                    >
+                      <q-img 
+                        :src="image" 
+                        alt="ECG Prototype" 
+                        :ratio="16/9"
+                        spinner-color="primary"
+                        spinner-size="82px"
+                        fit="contain"
+                        class="rounded-borders"
+                        @error="handleImageError"
+                      >
+                        <template v-slot:error>
+                          <div class="absolute-full flex flex-center bg-grey-3">
+                            <div class="text-h6 text-grey-8">Error loading ECG image</div>
+                          </div>
+                        </template>
+                      </q-img>
+                    </q-carousel-slide>
+                  </q-carousel>
                 </div>
               </q-card-section>
               
@@ -159,6 +168,33 @@
         </div>
       </div>
 
+      <!-- General Feedback Section -->
+      <div class="col-12">
+        <div class="row justify-end">
+          <div class="col-md-9 col-sm-8 col-xs-12">
+            <q-card class="q-mb-lg">
+              <q-card-section class="bg-primary text-white">
+                <div class="text-h6">General Feedback</div>
+              </q-card-section>
+              <q-card-section>
+                <div class="text-subtitle2 q-mb-sm">Prototype Redundancy</div>
+                <div class="text-caption q-mb-md">
+                  Did any of the prototypes feel redundant or too similar to each other? Please explain.
+                </div>
+                <q-input
+                  v-model="generalFeedback"
+                  type="textarea"
+                  label="Comments about prototype redundancy"
+                  outlined
+                  autogrow
+                  rows="4"
+                />
+              </q-card-section>
+            </q-card>
+          </div>
+        </div>
+      </div>
+
       <!-- Submit Button (Desktop and Mobile) -->
       <div class="row justify-end q-mt-lg q-mb-xl col-12">
         <q-btn
@@ -213,67 +249,85 @@
 import { ref, computed, onMounted, watch, reactive } from 'vue'
 import { useEvaluationStore } from '../stores/evaluation'
 import { useQuasar } from 'quasar'
+import { useRouter, useRoute } from 'vue-router'
 
 // Initialize the store and Quasar
 const store = useEvaluationStore()
 const $q = useQuasar()
 
-// Mock data for prototype evaluation
-const mockPrototypes = {
-  // Sample data for Atrial Fibrillation
-  'atrial-fibrillation': [
-    {
-      id: 'af-baseline-1',
-      diagnosticClass: 'Atrial Fibrillation',
-      model: 'baseline',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000001.png',
-      description: 'ECG Prototype A'
-    },
-    {
-      id: 'af-proposed-1',
-      diagnosticClass: 'Atrial Fibrillation',
-      model: 'proposed',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000002.png',
-      description: 'ECG Prototype B'
-    }
-  ],
+// Get router and route instances
+const router = useRouter()
+const route = useRoute()
+
+// Import the image map data
+import imageMapData from '../assets/imageDirMap.generated.json'
+
+// Function to convert image data from imageDirMap to prototypes structure
+function processImageMapData() {
+  const processedData = {};
   
-  // Sample data for Myocardial Infarction
-  'myocardial-infarction': [
-    {
-      id: 'mi-baseline-1',
-      diagnosticClass: 'Myocardial Infarction',
-      model: 'baseline',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000003.png',
-      description: 'ECG Prototype A'
-    },
-    {
-      id: 'mi-proposed-1',
-      diagnosticClass: 'Myocardial Infarction',
-      model: 'proposed',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000004.png',
-      description: 'ECG Prototype B'
-    }
-  ],
+  // Iterate through the main categories (e.g., 1D_rhythm_category1, 2D_global_category4)
+  Object.keys(imageMapData).forEach(mainCategory => {
+    const categoryData = imageMapData[mainCategory];
+    
+    // Iterate through the sub-categories (e.g., prototype_ecgs_cat1_static_constants_tune1_proj)
+    Object.keys(categoryData).forEach(subCategory => {
+      const classesData = categoryData[subCategory];
+      
+      // Iterate through the diagnostic classes (e.g., 1AVB, 2AVB, etc.)
+      Object.keys(classesData).forEach(diagnosticClass => {
+        // Skip empty classes
+        if (!classesData[diagnosticClass] || classesData[diagnosticClass].length === 0) {
+          return;
+        }
+        
+        // Create slug from diagnostic class for use as key
+        const classSlug = diagnosticClass.toLowerCase().replace(/[\s()_]/g, '-');
+        
+        if (!processedData[classSlug]) {
+          processedData[classSlug] = [];
+        }
+        
+        // Group images by prototype name
+        const prototypeGroups = {};
+        
+        // Process each image in the diagnostic class
+        classesData[diagnosticClass].forEach(imageName => {
+          // Extract prototype name from the image name
+          // Example: "Prototype_16_ECG_rhythm_II.png" -> "Prototype_16"
+          const prototypeMatch = imageName.match(/^(Prototype_\d+)/);
+          if (prototypeMatch) {
+            const prototypeName = prototypeMatch[1];
+            
+            if (!prototypeGroups[prototypeName]) {
+              prototypeGroups[prototypeName] = [];
+            }
+            
+            // Construct the full image URL (adjust the base path as needed)
+            const imageUrl = `/prototypes/${mainCategory}/${subCategory}/${diagnosticClass}/${imageName}`;
+            prototypeGroups[prototypeName].push(imageUrl);
+          }
+        });
+        
+        // Convert prototype groups to array format
+        Object.keys(prototypeGroups).forEach((prototypeName, index) => {
+          // Use the original diagnostic class name without formatting
+          const model = index % 2 === 0 ? 'baseline' : 'proposed';
+          
+          processedData[classSlug].push({
+            id: `${classSlug}-${prototypeName.toLowerCase()}`,
+            diagnosticClass: diagnosticClass,
+            model,
+            images: prototypeGroups[prototypeName],
+            description: `${prototypeName.replace('_', ' ')}`
+          });
+        });
+      });
+    });
+  });
   
-  // Sample data for Left Bundle Branch Block
-  'lbbb': [
-    {
-      id: 'lbbb-baseline-1',
-      diagnosticClass: 'Left Bundle Branch Block',
-      model: 'baseline',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000005.png',
-      description: 'ECG Prototype A'
-    },
-    {
-      id: 'lbbb-proposed-1',
-      diagnosticClass: 'Left Bundle Branch Block',
-      model: 'proposed',
-      imageUrl: 'https://storage.googleapis.com/kaggle-competitions/kaggle/33322/pix/ECG000006.png',
-      description: 'ECG Prototype B'
-    }
-  ]
-};
+  return processedData;
+}
 
 // State variables
 const currentReviewer = ref(null)
@@ -281,11 +335,12 @@ const currentClass = ref(null)
 const bestPrototypes = ref([])
 const prototypeRatings = ref({})
 const prototypeComments = ref({})
+const generalFeedback = ref('')
 const showError = ref(false)
 const showSuccess = ref(false)
 
-// Make mockPrototypes available as reactive state
-const prototypesData = ref(mockPrototypes)
+// Process image map data and make it available as reactive state
+const prototypesData = ref(processImageMapData())
 
 // Rating criteria
 const ratingCriteria = {
@@ -312,14 +367,18 @@ const reviewerOptions = [
   { label: 'Nipun Bhandari', value: 'Nipun Bhandari' }
 ]
 
-const diagnosticClasses = ref(Object.keys(mockPrototypes))
+const diagnosticClasses = ref(Object.keys(prototypesData.value))
 const diagnosticClassOptions = computed(() => {
   return diagnosticClasses.value.map(className => {
-    // Format the class name for display
-    const displayName = className
-      .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ')
+    // Use the original name from the slug (no additional formatting)
+    // Find the original diagnostic class name from the first prototype in this class
+    const prototypes = prototypesData.value[className] || [];
+    let displayName = className;
+    
+    if (prototypes.length > 0) {
+      // Use the diagnosticClass property from the first prototype
+      displayName = prototypes[0].diagnosticClass;
+    }
     
     return {
       label: displayName,
@@ -358,6 +417,10 @@ function initializePrototypeData(prototypes) {
     // Initialize comments if not already set
     if (!prototypeComments.value[prototype.id]) {
       prototypeComments.value[prototype.id] = '';
+    }
+    // Initialize carousel index if not already set
+    if (currentImageIndex.value[prototype.id] === undefined) {
+      currentImageIndex.value[prototype.id] = 0;
     }
   });
 }
@@ -461,11 +524,14 @@ const submitEvaluation = () => {
       bestPrototype: currentPrototypes.value[bestPrototypes.value[0]]?.id,
       ratings: prototypeRatings.value,
       comments: prototypeComments.value,
+      imageIndices: currentImageIndex.value,
+      generalFeedback: generalFeedback.value,
       prototypes: currentPrototypes.value.map(prototype => ({
         id: prototype.id,
         diagnosticClass: prototype.diagnosticClass,
         model: prototype.model,
-        description: prototype.description
+        description: prototype.description,
+        imageCount: prototype.images.length
       }))
     };
     
@@ -561,6 +627,22 @@ onMounted(() => {
     currentClass.value = diagnosticClasses.value[0]
   }
   
+  // Extract the reviewer code from the URL
+  const userCode = route.query.user
+  
+  if (userCode && /^\d{6}$/.test(userCode)) {
+    // Set current reviewer from URL parameter
+    currentReviewer.value = `Reviewer-${userCode}`
+  } else {
+    // If no valid code is found, show a notification
+    $q.notify({
+      type: 'warning',
+      message: 'No valid reviewer code provided. Please use a valid URL with a 6-digit reviewer code.',
+      position: 'top',
+      timeout: 5000
+    })
+  }
+  
   // Add scroll event listener to track current prototype
   window.addEventListener('scroll', updateCurrentPrototype)
 })
@@ -586,6 +668,14 @@ const updateCurrentPrototype = () => {
     }
   }
 }
+
+// State variables for image handling
+const currentImageIndex = ref({})
+const slideTransition = ref('fade')
+
+const updateImageIndex = (prototypeId) => {
+  console.log('Updated image index for prototype:', prototypeId, currentImageIndex.value[prototypeId]);
+}
 </script>
 
 <style scoped>
@@ -601,6 +691,25 @@ const updateCurrentPrototype = () => {
 .ecg-display {
   background-color: #f5f5f5;
   border-radius: 4px;
+}
+
+/* Carousel styling */
+:deep(.q-carousel) {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  height: auto;
+}
+
+:deep(.q-carousel__slide) {
+  padding: 12px;
+}
+
+:deep(.q-carousel__navigation-icon) {
+  font-size: 10px;
+}
+
+:deep(.q-carousel__navigation .q-btn) {
+  margin: 4px 4px 8px;
 }
 
 .prototype-nav {
