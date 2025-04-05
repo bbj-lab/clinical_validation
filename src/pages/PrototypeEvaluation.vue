@@ -11,15 +11,19 @@
           label="Select Diagnostic Class"
           outlined
           @update:model-value="handleClassChange"
-        />
+        >
+          <template v-slot:option="scope">
+            <q-item v-bind="scope.itemProps">
+              <q-item-section>
+                <q-item-label :class="{ 'text-positive': completedClasses.includes(scope.opt.value) }">
+                  {{ scope.opt.label }}
+                  <q-icon v-if="completedClasses.includes(scope.opt.value)" name="check_circle" color="positive" size="xs" class="q-ml-sm" />
+                </q-item-label>
+              </q-item-section>
+            </q-item>
+          </template>
+        </q-select>
       </div>
-    </div>
-
-    <!-- Debug info -->
-    <div class="q-mb-md text-caption">
-      Reviewer code: {{ currentReviewer || 'Not provided' }}, 
-      Has class: {{ !!currentClass }}, 
-      Prototypes length: {{ currentPrototypes.length }}
     </div>
 
     <!-- Prototype Section -->
@@ -34,11 +38,20 @@
               clickable
               v-ripple
               @click="scrollToPrototype(index)"
-              :active="currentPrototypeIndex === index"
-              active-class="bg-primary text-white"
+              :class="{
+                'bg-primary text-white': currentPrototypeIndex === index,
+                'bg-light-green-1': isPrototypeComplete(index) && currentPrototypeIndex !== index
+              }"
             >
               <q-item-section>
                 Prototype {{ index + 1 }}
+                <q-icon
+                  v-if="isPrototypeComplete(index)"
+                  name="check_circle"
+                  color="positive"
+                  size="xs"
+                  class="q-ml-sm"
+                />
               </q-item-section>
             </q-item>
           </q-list>
@@ -59,12 +72,11 @@
             <q-card class="prototype-card q-mb-lg">
               <q-card-section class="bg-primary text-white">
                 <div class="text-h6">Prototype {{ index + 1 }}</div>
-                <div class="text-subtitle2">{{ prototype.diagnosticClass }}</div>
+                <!-- <div class="text-subtitle2">{{ prototype.diagnosticClass }}</div> -->
               </q-card-section>
               
               <!-- Prototype Image Section -->
               <q-card-section>
-                <div class="text-subtitle2 q-mb-sm">{{ prototype.description }}</div>
                 <div class="ecg-display">
                   <q-carousel
                     v-model="currentImageIndex[prototype.id]"
@@ -100,17 +112,6 @@
                     </q-carousel-slide>
                   </q-carousel>
                 </div>
-              </q-card-section>
-              
-              <!-- Select Best Button -->
-              <q-card-section>
-                <q-btn
-                  :color="isPrototypeSelected(index) ? 'positive' : 'primary'"
-                  :outline="!isPrototypeSelected(index)"
-                  :icon="isPrototypeSelected(index) ? 'check_circle' : 'radio_button_unchecked'"
-                  :label="isPrototypeSelected(index) ? 'Selected as Best Prototype' : 'Select as Best Prototype'"
-                  @click="toggleBestPrototype(index)"
-                />
               </q-card-section>
               
               <!-- Rating Section -->
@@ -161,6 +162,28 @@
                     @update:model-value="updateComments(prototype.id)"
                   />
                 </div>
+                
+                <!-- Select Best / Bad Prototype Buttons -->
+                <div class="row q-col-gutter-md q-mt-lg">
+                  <div class="col">
+                    <q-btn
+                      :color="isPrototypeSelected(index) ? 'positive' : 'primary'"
+                      :outline="!isPrototypeSelected(index)"
+                      :icon="isPrototypeSelected(index) ? 'check_circle' : 'radio_button_unchecked'"
+                      :label="isPrototypeSelected(index) ? 'Selected as Best Prototype' : 'Select as Best Prototype'"
+                      @click="toggleBestPrototype(index)"
+                    />
+                  </div>
+                  <div class="col">
+                    <q-btn
+                      :color="isBadPrototypeSelected(index) ? 'negative' : 'grey'"
+                      :outline="!isBadPrototypeSelected(index)"
+                      :icon="isBadPrototypeSelected(index) ? 'cancel' : 'radio_button_unchecked'"
+                      :label="isBadPrototypeSelected(index) ? 'Marked as Bad Prototype' : 'Mark as Bad Prototype'"
+                      @click="toggleBadPrototype(index)"
+                    />
+                  </div>
+                </div>
               </q-card-section>
             </q-card>
           </div>
@@ -197,13 +220,33 @@
       <!-- Submit Button (Desktop and Mobile) -->
       <div class="row justify-end q-mt-lg q-mb-xl col-12">
         <q-btn
+          v-if="!isAllClassesCompleted"
           color="primary"
-          label="Submit Evaluation"
+          :label="isLastClass ? 'Submit All Results' : 'Next Class'"
           :loading="isLoading"
           :disable="!isFormValid"
-          @click="submitEvaluation"
+          @click="handleNextClass"
           size="lg"
           class="q-mb-xl"
+        />
+        <q-btn
+          v-else
+          color="positive"
+          label="Download Results"
+          :loading="isLoading"
+          @click="downloadAllResults"
+          size="lg"
+          class="q-mb-xl"
+        />
+        
+        <!-- Debug Download Button (Remove in Production) -->
+        <q-btn
+          color="grey"
+          label="Debug Download"
+          :loading="isLoading"
+          @click="downloadAllResults"
+          size="lg"
+          class="q-mb-xl q-ml-md"
         />
       </div>
     </div>
@@ -217,7 +260,7 @@
       <q-card>
         <q-card-section class="row items-center">
           <q-avatar icon="check_circle" color="positive" text-color="white" />
-          <span class="q-ml-sm">Evaluation submitted successfully!</span>
+          <span class="q-ml-sm">{{ successMessage }}</span>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Continue" color="primary" v-close-popup />
@@ -346,6 +389,7 @@ function processImageMapData() {
 const currentReviewer = ref(null)
 const currentClass = ref(null)
 const bestPrototypes = ref([])
+const badPrototypes = ref([])
 const prototypeRatings = ref({})
 const prototypeComments = ref({})
 const generalFeedback = ref('')
@@ -433,6 +477,25 @@ function initializePrototypeData(prototypes) {
       currentImageIndex.value[prototype.id] = 0;
     }
   });
+  
+  // Check if we have saved data for this class and restore bad prototypes
+  if (currentClass.value && evaluationResults.value[currentClass.value]) {
+    const savedData = evaluationResults.value[currentClass.value];
+    
+    // Restore bad prototypes if they exist
+    if (savedData.badPrototypes && savedData.badPrototypes.length > 0) {
+      // Convert saved prototype IDs back to indices
+      const prototypeIdToIndex = {};
+      currentPrototypes.value.forEach((prototype, index) => {
+        prototypeIdToIndex[prototype.id] = index;
+      });
+      
+      // Set bad prototypes based on saved IDs
+      badPrototypes.value = savedData.badPrototypes
+        .map(id => prototypeIdToIndex[id])
+        .filter(index => index !== undefined);
+    }
+  }
 }
 
 // Check if all prototypes have been rated
@@ -474,10 +537,56 @@ const handleClassChange = (className) => {
   
   // Reset the form
   bestPrototypes.value = [];
+  badPrototypes.value = []; // Reset bad prototypes too
+  
+  // Reset general feedback
+  generalFeedback.value = '';
+  
+  // Check if we have saved data for this class and restore it
+  if (evaluationResults.value[currentClass.value]) {
+    const savedData = evaluationResults.value[currentClass.value];
+    
+    // Restore general feedback if it exists
+    if (savedData.generalFeedback) {
+      generalFeedback.value = savedData.generalFeedback;
+    }
+    
+    // Restore best prototype if it exists
+    if (savedData.bestPrototype) {
+      // Convert saved prototype ID back to index
+      const prototypeIdToIndex = {};
+      currentPrototypes.value.forEach((prototype, index) => {
+        prototypeIdToIndex[prototype.id] = index;
+      });
+      
+      const bestIndex = prototypeIdToIndex[savedData.bestPrototype];
+      if (bestIndex !== undefined) {
+        bestPrototypes.value = [bestIndex];
+      }
+    }
+    
+    // Restore ratings if they exist
+    if (savedData.ratings) {
+      Object.keys(savedData.ratings).forEach(prototypeId => {
+        prototypeRatings.value[prototypeId] = savedData.ratings[prototypeId];
+      });
+    }
+    
+    // Restore comments if they exist
+    if (savedData.comments) {
+      Object.keys(savedData.comments).forEach(prototypeId => {
+        prototypeComments.value[prototypeId] = savedData.comments[prototypeId];
+      });
+    }
+  }
 }
 
 const isPrototypeSelected = (index) => {
   return bestPrototypes.value.includes(index);
+}
+
+const isBadPrototypeSelected = (index) => {
+  return badPrototypes.value.includes(index);
 }
 
 const toggleBestPrototype = (index) => {
@@ -487,6 +596,16 @@ const toggleBestPrototype = (index) => {
   } else {
     // If selecting a new one, clear any existing selection first
     bestPrototypes.value = [index];
+  }
+}
+
+const toggleBadPrototype = (index) => {
+  if (badPrototypes.value.includes(index)) {
+    // If already selected, deselect it
+    badPrototypes.value = badPrototypes.value.filter(i => i !== index);
+  } else {
+    // Add to bad prototypes (can select multiple)
+    badPrototypes.value.push(index);
   }
 }
 
@@ -525,17 +644,172 @@ const handleImageError = (event) => {
   imageErrors.value[event.target.src] = true
 }
 
-const submitEvaluation = () => {
+// New variables for the "Next Class" flow
+const completedClasses = ref([])
+const evaluationResults = ref({})
+const isAllClassesCompleted = ref(false)
+const isLastClass = computed(() => {
+  // Check if we're on the last incomplete class
+  const uncompletedClasses = diagnosticClasses.value.filter(
+    classItem => !completedClasses.value.includes(classItem)
+  )
+  return uncompletedClasses.length <= 1 && currentClass.value === uncompletedClasses[0]
+})
+const successMessage = ref('')
+
+// Load saved state from localStorage
+onMounted(() => {
+  // Set default diagnostic class
+  if (diagnosticClasses.value.length > 0) {
+    currentClass.value = diagnosticClasses.value[0]
+  }
+  
+  // Extract the reviewer code from the URL
+  const userCode = route.query.user
+  
+  if (userCode && /^\d{6}$/.test(userCode)) {
+    // Set current reviewer from URL parameter
+    currentReviewer.value = `Reviewer-${userCode}`
+    
+    // Try to load saved data from localStorage
+    const savedKey = `ecg-eval-${currentReviewer.value}`
+    try {
+      const savedData = localStorage.getItem(savedKey)
+      if (savedData) {
+        const parsed = JSON.parse(savedData)
+        evaluationResults.value = parsed.evaluations || {}
+        completedClasses.value = parsed.completedClasses || []
+        
+        // Check if all classes are completed
+        isAllClassesCompleted.value = checkAllClassesCompleted()
+        
+        // If we have at least one completed class, show a notification
+        if (completedClasses.value.length > 0) {
+          $q.notify({
+            type: 'positive',
+            message: `Loaded your saved progress (${completedClasses.value.length} classes completed)`,
+            position: 'top',
+            timeout: 3000
+          })
+          
+          // Set current class to first incomplete class
+          const firstIncompleteClass = diagnosticClasses.value.find(
+            classItem => !completedClasses.value.includes(classItem)
+          )
+          if (firstIncompleteClass) {
+            currentClass.value = firstIncompleteClass
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error loading saved data:', err)
+    }
+  } else {
+    // If no valid code is found, show a notification
+    $q.notify({
+      type: 'warning',
+      message: 'No valid reviewer code provided. Please use a valid URL with a 6-digit reviewer code.',
+      position: 'top',
+      timeout: 5000
+    })
+  }
+  
+  // Add scroll event listener to track current prototype
+  window.addEventListener('scroll', updateCurrentPrototype)
+})
+
+// Check if all diagnostic classes have been completed
+const checkAllClassesCompleted = () => {
+  return completedClasses.value.length >= diagnosticClasses.value.length
+}
+
+// Save current state to localStorage
+const saveToLocalStorage = () => {
+  if (!currentReviewer.value) return
+  
+  const savedKey = `ecg-eval-${currentReviewer.value}`
+  const dataToSave = {
+    evaluations: evaluationResults.value,
+    completedClasses: completedClasses.value,
+    lastUpdated: new Date().toISOString()
+  }
+  
   try {
-    // 1. Create the evaluation object with all relevant data
+    localStorage.setItem(savedKey, JSON.stringify(dataToSave))
+  } catch (err) {
+    console.error('Error saving to localStorage:', err)
+    $q.notify({
+      type: 'negative',
+      message: 'Could not save progress locally. Your browser storage might be full.',
+      position: 'top',
+      timeout: 5000
+    })
+  }
+}
+
+const handleNextClass = () => {
+  // Save current evaluation data
+  saveCurrentEvaluation()
+  
+  // Show success message
+  successMessage.value = 'Evaluation saved successfully!'
+  showSuccess.value = true
+  
+  // Mark current class as completed if not already in the list
+  if (!completedClasses.value.includes(currentClass.value)) {
+    completedClasses.value.push(currentClass.value)
+  }
+  
+  // Save to localStorage
+  saveToLocalStorage()
+  
+  // Check if all classes are completed
+  isAllClassesCompleted.value = checkAllClassesCompleted()
+  
+  // If all classes are completed, show appropriate message
+  if (isAllClassesCompleted.value) {
+    $q.notify({
+      type: 'positive',
+      message: 'All classes have been evaluated! You can now download your results.',
+      position: 'top',
+      timeout: 5000
+    })
+  } else {
+    // Reset the general feedback field
+    generalFeedback.value = ''
+    
+    // Move to the next incomplete class
+    const nextIncompleteClass = diagnosticClasses.value.find(
+      classItem => !completedClasses.value.includes(classItem)
+    )
+    
+    if (nextIncompleteClass) {
+      // Wait a bit before changing the class to allow the success dialog to be seen
+      setTimeout(() => {
+        // Find the option object for the next class
+        const nextClassOption = diagnosticClassOptions.value.find(
+          option => option.value === nextIncompleteClass
+        )
+        if (nextClassOption) {
+          currentClass.value = nextClassOption.value
+          handleClassChange({ value: nextClassOption.value, label: nextClassOption.label })
+        }
+      }, 1000)
+    }
+  }
+}
+
+const saveCurrentEvaluation = () => {
+  try {
+    // Create the evaluation object with all relevant data
     const evaluationData = {
       reviewer: currentReviewer.value,
       diagnosticClass: currentClass.value,
       timestamp: new Date().toISOString(),
       bestPrototype: currentPrototypes.value[bestPrototypes.value[0]]?.id,
-      ratings: prototypeRatings.value,
-      comments: prototypeComments.value,
-      imageIndices: currentImageIndex.value,
+      badPrototypes: badPrototypes.value.map(index => currentPrototypes.value[index]?.id).filter(Boolean),
+      ratings: JSON.parse(JSON.stringify(prototypeRatings.value)),
+      comments: JSON.parse(JSON.stringify(prototypeComments.value)),
       generalFeedback: generalFeedback.value,
       prototypes: currentPrototypes.value.map(prototype => ({
         id: prototype.id,
@@ -544,48 +818,75 @@ const submitEvaluation = () => {
         description: prototype.description,
         imageCount: prototype.images.length
       }))
-    };
+    }
     
-    // 2. Format the filename
-    const reviewer = currentReviewer.value.replace(/\s+/g, '-').toLowerCase();
-    const date = new Date().toISOString().split('T')[0];
-    const filename = `ecg-evaluation-${reviewer}-${currentClass.value}-${date}.json`;
+    // Store in the global evaluationResults object
+    evaluationResults.value[currentClass.value] = evaluationData
     
-    // 3. Create JSON string with proper formatting
-    const jsonString = JSON.stringify(evaluationData, null, 2);
+    return true
+  } catch (e) {
+    console.error('Failed to save evaluation:', e)
+    $q.notify({
+      type: 'negative',
+      message: 'Could not save evaluation data. Please try again.',
+      position: 'top',
+      timeout: 5000
+    })
     
-    // 4. Create and use the download link
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    return false
+  }
+}
+
+const downloadAllResults = () => {
+  try {
+    // Prepare the complete results object
+    const completeResults = {
+      reviewer: currentReviewer.value,
+      timestamp: new Date().toISOString(),
+      classesEvaluated: completedClasses.value,
+      totalClasses: diagnosticClasses.value.length,
+      evaluations: evaluationResults.value
+    }
     
-    // 5. Set up and trigger download
-    a.style.display = 'none';
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+    // Format the filename
+    const reviewer = currentReviewer.value.replace(/\s+/g, '-').toLowerCase()
+    const date = new Date().toISOString().split('T')[0]
+    const filename = `ecg-evaluation-all-classes-${reviewer}-${date}.json`
     
-    // 6. Clean up
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    // Create JSON string with proper formatting
+    const jsonString = JSON.stringify(completeResults, null, 2)
     
-    // 7. Show success notification
+    // Create and use the download link
+    const blob = new Blob([jsonString], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    
+    // Set up and trigger download
+    a.style.display = 'none'
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    
+    // Clean up
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    
+    // Show success notification
+    successMessage.value = 'All evaluation data downloaded successfully!'
+    showSuccess.value = true
+    
     $q.notify({
       type: 'positive',
       message: 'Evaluation data downloaded successfully!',
       icon: 'cloud_download',
       position: 'top',
       timeout: 3000
-    });
+    })
     
-    // 8. Reset the form state
-    showSuccess.value = true;
-    bestPrototypes.value = [];
-    
+    return true
   } catch (e) {
-    // Simple error handling with console output and notification
-    console.error('Download failed:', e);
+    console.error('Download failed:', e)
     
     $q.notify({
       type: 'negative',
@@ -593,16 +894,15 @@ const submitEvaluation = () => {
       icon: 'error',
       position: 'top',
       timeout: 5000
-    });
+    })
     
-    showError.value = true;
+    showError.value = true
+    return false
   }
-};
-
-// Marker labels for the slider (1-5)
-const markerClass = val => {
-  return 'text-weight-bold'
 }
+
+// Replace the original submit function with our new workflow
+const submitEvaluation = handleNextClass
 
 // Store refs to prototype cards for scrolling
 const prototypeRefs = ref([])
@@ -630,33 +930,6 @@ const scrollToPrototype = (index) => {
     })
   }
 }
-
-// Watch window scroll to update active prototype in the nav
-onMounted(() => {
-  // Set default diagnostic class
-  if (diagnosticClasses.value.length > 0) {
-    currentClass.value = diagnosticClasses.value[0]
-  }
-  
-  // Extract the reviewer code from the URL
-  const userCode = route.query.user
-  
-  if (userCode && /^\d{6}$/.test(userCode)) {
-    // Set current reviewer from URL parameter
-    currentReviewer.value = `Reviewer-${userCode}`
-  } else {
-    // If no valid code is found, show a notification
-    $q.notify({
-      type: 'warning',
-      message: 'No valid reviewer code provided. Please use a valid URL with a 6-digit reviewer code.',
-      position: 'top',
-      timeout: 5000
-    })
-  }
-  
-  // Add scroll event listener to track current prototype
-  window.addEventListener('scroll', updateCurrentPrototype)
-})
 
 // Clean up the event listener when component is unmounted
 const beforeUnmount = () => {
@@ -687,6 +960,24 @@ const slideTransition = ref('fade')
 const updateImageIndex = (prototypeId) => {
   console.log('Updated image index for prototype:', prototypeId, currentImageIndex.value[prototypeId]);
 }
+
+// Marker labels for the slider (1-5)
+const markerClass = () => 'text-weight-bold'
+
+// Function to check if a prototype is completely rated
+const isPrototypeComplete = (index) => {
+  if (!currentPrototypes.value[index]) return false
+  
+  const prototype = currentPrototypes.value[index]
+  const ratings = prototypeRatings.value[prototype.id]
+  
+  // Check if all criteria have been rated
+  return ratings && 
+    ratings.representativeness > 0 &&
+    ratings.clarity > 0 &&
+    ratings.usefulness > 0 &&
+    ratings.distinctiveness > 0
+}
 </script>
 
 <style scoped>
@@ -712,7 +1003,7 @@ const updateImageIndex = (prototypeId) => {
 }
 
 :deep(.q-carousel__slide) {
-  padding: 12px;
+  padding: 6px;
 }
 
 :deep(.q-carousel__navigation-icon) {
@@ -788,7 +1079,7 @@ const updateImageIndex = (prototypeId) => {
 .ecg-image-wrapper {
   background-color: #f5f5f5;
   border-radius: 4px;
-  padding: 12px;
+  padding: 6px;
   text-align: center;
   overflow: hidden;
   position: relative;
@@ -796,12 +1087,14 @@ const updateImageIndex = (prototypeId) => {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .ecg-image {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
+  width: 100%;
 }
 
 .crop-extra-segment {
