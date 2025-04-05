@@ -303,8 +303,8 @@ function processImageMapData() {
               prototypeGroups[prototypeName] = [];
             }
             
-            // Construct the full image URL (adjust the base path as needed)
-            const imageUrl = `/prototypes/${mainCategory}/${subCategory}/${diagnosticClass}/${imageName}`;
+            // Construct the full image URL using the Cloudflare R2 bucket
+            const imageUrl = `https://pub-c422172c6c414e1c825fefb55538d69e.r2.dev/${mainCategory}/${subCategory}/${diagnosticClass}/${imageName}`;
             prototypeGroups[prototypeName].push(imageUrl);
           }
         });
