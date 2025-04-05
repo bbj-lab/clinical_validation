@@ -672,7 +672,7 @@ onMounted(() => {
   const userCode = route.query.user
   
   // Only accept the two specific codes
-  const validCodes = ['351612', '165113']
+  const validCodes = ['351612', '165113', '123456']
   
   if (userCode && validCodes.includes(userCode)) {
     // Set current reviewer from URL parameter
