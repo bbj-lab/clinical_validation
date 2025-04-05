@@ -82,22 +82,21 @@
                       :key="`${prototype.id}-${imageIndex}`"
                       :name="imageIndex"
                     >
-                      <q-img 
-                        :src="image" 
-                        alt="ECG Prototype" 
-                        :ratio="16/9"
-                        spinner-color="primary"
-                        spinner-size="82px"
-                        fit="contain"
-                        class="rounded-borders"
-                        @error="handleImageError"
-                      >
-                        <template v-slot:error>
-                          <div class="absolute-full flex flex-center bg-grey-3">
-                            <div class="text-h6 text-grey-8">Error loading ECG image</div>
-                          </div>
-                        </template>
-                      </q-img>
+                      <div class="ecg-image-wrapper">
+                        <img
+                          :src="image"
+                          alt="ECG Prototype"
+                          :class="[
+                            'ecg-image',
+                            image.includes('extra_segment') ? 'crop-extra-segment' : 
+                            image.includes('rhythm_II') ? 'crop-rhythm' : 'crop-default'
+                          ]"
+                          @error="handleImageError"
+                        />
+                        <div v-if="imageErrors[image]" class="ecg-image-error">
+                          <div class="text-h6 text-grey-8">Error loading ECG image</div>
+                        </div>
+                      </div>
                     </q-carousel-slide>
                   </q-carousel>
                 </div>
@@ -305,7 +304,11 @@ function processImageMapData() {
             
             // Construct the full image URL using the Cloudflare R2 bucket
             const imageUrl = `https://pub-c422172c6c414e1c825fefb55538d69e.r2.dev/${mainCategory}/${subCategory}/${diagnosticClass}/${imageName}`;
-            prototypeGroups[prototypeName].push(imageUrl);
+            prototypeGroups[prototypeName].push({
+              url: imageUrl,
+              imageName: imageName,
+              isPriority: imageName.includes('extra_segment') || imageName.includes('rhythm_II')
+            });
           }
         });
         
@@ -314,11 +317,21 @@ function processImageMapData() {
           // Use the original diagnostic class name without formatting
           const model = index % 2 === 0 ? 'baseline' : 'proposed';
           
+          // Sort images to prioritize ones with 'extra_segment' or 'rhythm_II' in their names
+          prototypeGroups[prototypeName].sort((a, b) => {
+            if (a.isPriority && !b.isPriority) return -1;
+            if (!a.isPriority && b.isPriority) return 1;
+            return 0;
+          });
+          
+          // Extract just the URLs for the final structure
+          const sortedImageUrls = prototypeGroups[prototypeName].map(img => img.url);
+          
           processedData[classSlug].push({
             id: `${classSlug}-${prototypeName.toLowerCase()}`,
             diagnosticClass: diagnosticClass,
             model,
-            images: prototypeGroups[prototypeName],
+            images: sortedImageUrls,
             description: `${prototypeName.replace('_', ' ')}`
           });
         });
@@ -338,6 +351,7 @@ const prototypeComments = ref({})
 const generalFeedback = ref('')
 const showError = ref(false)
 const showSuccess = ref(false)
+const imageErrors = ref({})
 
 // Process image map data and make it available as reactive state
 const prototypesData = ref(processImageMapData())
@@ -362,10 +376,6 @@ const ratingCriteria = {
   }
 }
 
-const reviewerOptions = [
-  { label: 'Bashar Ramadan', value: 'Bashar Ramadan' },
-  { label: 'Nipun Bhandari', value: 'Nipun Bhandari' }
-]
 
 const diagnosticClasses = ref(Object.keys(prototypesData.value))
 const diagnosticClassOptions = computed(() => {
@@ -510,8 +520,9 @@ const getRatingColor = (rating) => {
   return colors[rating] || 'grey'
 }
 
-const handleImageError = () => {
-  console.error('Failed to load ECG image')
+const handleImageError = (event) => {
+  console.error('Failed to load ECG image', event.target.src)
+  imageErrors.value[event.target.src] = true
 }
 
 const submitEvaluation = () => {
@@ -772,5 +783,48 @@ const updateImageIndex = (prototypeId) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ecg-image-wrapper {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 12px;
+  text-align: center;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 16/9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ecg-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.crop-extra-segment {
+  clip-path: inset(5% 0 0 0); /* Crop top 8% for extra_segment images */
+}
+
+.crop-rhythm {
+  clip-path: inset(10% 0 0 0); /* Crop top 10% for rhythm_II images */
+}
+
+.crop-default {
+  clip-path: inset(4% 0 0 0); /* Crop top 9% for all other images */
+}
+
+.ecg-image-error {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5f5f5;
 }
 </style> 
