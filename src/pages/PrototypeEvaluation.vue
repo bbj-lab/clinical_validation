@@ -84,7 +84,7 @@
                 <div class="ecg-display">
                   <q-carousel
                     v-model="currentImageIndex[prototype.id]"
-                    :arrows="true"
+                    :arrows="false"
                     :autoplay="false"
                     :infinite="false"
                     :navigation="false"
@@ -115,6 +115,29 @@
                       </div>
                     </q-carousel-slide>
                   </q-carousel>
+                  
+                  <!-- Custom navigation buttons below the carousel -->
+                  <div class="carousel-navigation row justify-center q-mt-sm">
+                    <q-btn
+                      round
+                      flat
+                      icon="arrow_back"
+                      color="primary"
+                      :disable="currentImageIndex[prototype.id] === 0"
+                      @click="moveCarousel(prototype.id, -1)"
+                    />
+                    <div class="carousel-page-indicator q-mx-md">
+                      {{ currentImageIndex[prototype.id] + 1 }} / {{ prototype.images.length }}
+                    </div>
+                    <q-btn
+                      round
+                      flat
+                      icon="arrow_forward"
+                      color="primary"
+                      :disable="currentImageIndex[prototype.id] === prototype.images.length - 1"
+                      @click="moveCarousel(prototype.id, 1)"
+                    />
+                  </div>
                 </div>
               </q-card-section>
               
@@ -229,7 +252,6 @@
           color="primary"
           :label="isLastClass ? 'Submit All Results' : 'Next Class'"
           :loading="isLoading"
-          :disable="!isFormValid"
           @click="handleNextClass"
           size="lg"
           class="q-mb-xl"
@@ -293,11 +315,22 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Add scroll-to-top button -->
+    <q-page-sticky position="bottom-right" :offset="[18, 18]">
+      <q-btn
+        v-show="showScrollButton"
+        fab
+        icon="arrow_upward"
+        color="primary"
+        @click="scrollToTop"
+      />
+    </q-page-sticky>
   </q-page>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, reactive } from 'vue'
+import { ref, computed, onMounted, watch, reactive, nextTick } from 'vue'
 import { useEvaluationStore } from '../stores/evaluation'
 import { useQuasar } from 'quasar'
 import { useRouter, useRoute } from 'vue-router'
@@ -359,7 +392,8 @@ function processImageMapData() {
             prototypeGroups[prototypeName].push({
               url: imageUrl,
               imageName: imageName,
-              isPriority: imageName.includes('extra_segment') || imageName.includes('rhythm_II')
+              // Images with extra_segment are priority, rhythm_II are NOT priority
+              isPriority: imageName.includes('extra_segment') 
             });
           }
         });
@@ -371,8 +405,14 @@ function processImageMapData() {
           
           // Sort images to prioritize ones with 'extra_segment' or 'rhythm_II' in their names
           prototypeGroups[prototypeName].sort((a, b) => {
-            if (a.isPriority && !b.isPriority) return -1;
-            if (!a.isPriority && b.isPriority) return 1;
+            // First prioritize extra_segment images
+            if (a.imageName.includes('extra_segment') && !b.imageName.includes('extra_segment')) return -1;
+            if (!a.imageName.includes('extra_segment') && b.imageName.includes('extra_segment')) return 1;
+            
+            // Then deprioritize rhythm_II images (show them last)
+            if (a.imageName.includes('rhythm_II') && !b.imageName.includes('rhythm_II')) return 1;
+            if (!a.imageName.includes('rhythm_II') && b.imageName.includes('rhythm_II')) return -1;
+            
             return 0;
           });
           
@@ -746,7 +786,23 @@ const isLastClass = computed(() => {
 })
 const successMessage = ref('')
 
-// Load saved state from localStorage
+// Add scroll-to-top button
+const showScrollButton = ref(false)
+
+const scrollToTop = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
+}
+
+// Function to check scroll position and show/hide the button
+const checkScrollPosition = () => {
+  // Show button when user has scrolled down 300px or more
+  showScrollButton.value = window.scrollY > 300
+}
+
+// Add event listener for scroll
 onMounted(() => {
   // Set default diagnostic class
   if (diagnosticClasses.value.length > 0) {
@@ -756,7 +812,7 @@ onMounted(() => {
   // Extract the reviewer code from the URL
   const userCode = route.query.user
   
-  // Only accept the two specific codes
+  // Only accept the specified codes
   const validCodes = ['351612', '165113', '123456']
   
   if (userCode && validCodes.includes(userCode)) {
@@ -812,9 +868,16 @@ onMounted(() => {
     })
   }
   
-  // Add scroll event listener to track current prototype
+  // Add scroll event listeners
   window.addEventListener('scroll', updateCurrentPrototype)
+  window.addEventListener('scroll', checkScrollPosition)
 })
+
+// Clean up the event listeners when component is unmounted
+const beforeUnmount = () => {
+  window.removeEventListener('scroll', updateCurrentPrototype)
+  window.removeEventListener('scroll', checkScrollPosition)
+}
 
 // Check if all diagnostic classes have been completed
 const checkAllClassesCompleted = () => {
@@ -846,24 +909,60 @@ const saveToLocalStorage = () => {
   }
 }
 
-const handleNextClass = () => {
-  // Save current evaluation data
-  saveCurrentEvaluation()
+const handleNextClass = async () => {
+  // Validate all required fields
+  const missingFields = [];
   
-  // Show success message
-  successMessage.value = 'Evaluation saved successfully!'
-  showSuccess.value = true
+  // Check for best prototype selection
+  if (bestPrototypes.value.length === 0) {
+    missingFields.push("a best prototype selection");
+  }
+  
+  // Check if all prototypes have been rated
+  if (!allPrototypesRated.value) {
+    missingFields.push("ratings for all prototypes on all criteria");
+  }
+  
+  // If any required fields are missing, show a message and return
+  if (missingFields.length > 0) {
+    let message = "Please complete the following before proceeding:";
+    missingFields.forEach(field => {
+      message += `\n• ${field}`;
+    });
+    
+    $q.notify({
+      type: 'negative',
+      message: message,
+      multiLine: true,
+      position: 'top',
+      timeout: 5000
+    });
+    return;
+  }
+  
+  // If validation passes, proceed with saving and navigating
+  
+  // Save current evaluation data
+  saveCurrentEvaluation();
+  
+  // Get the current class display name for the success message
+  const currentClassOption = diagnosticClassOptions.value.find(opt => opt.value === currentClass.value);
+  const classDisplayName = currentClassOption ? currentClassOption.label : currentClass.value;
+  
+  // Show success message with the class name
+  successMessage.value = `Evaluation completed for ${classDisplayName}`;
+  showSuccess.value = true;
   
   // Mark current class as completed if not already in the list
   if (!completedClasses.value.includes(currentClass.value)) {
-    completedClasses.value.push(currentClass.value)
+    completedClasses.value.push(currentClass.value);
   }
   
   // Save to localStorage
-  saveToLocalStorage()
+  saveToLocalStorage();
   
   // Check if all classes are completed
-  isAllClassesCompleted.value = checkAllClassesCompleted()
+  isAllClassesCompleted.value = checkAllClassesCompleted();
   
   // If all classes are completed, show appropriate message
   if (isAllClassesCompleted.value) {
@@ -872,28 +971,24 @@ const handleNextClass = () => {
       message: 'All classes have been evaluated! You can now download your results.',
       position: 'top',
       timeout: 5000
-    })
+    });
   } else {
     // Reset the general feedback field
-    generalFeedback.value = ''
+    generalFeedback.value = '';
     
     // Move to the next incomplete class
     const nextIncompleteClass = diagnosticClasses.value.find(
       classItem => !completedClasses.value.includes(classItem)
-    )
+    );
     
     if (nextIncompleteClass) {
-      // Wait a bit before changing the class to allow the success dialog to be seen
-      setTimeout(() => {
-        // Find the option object for the next class
-        const nextClassOption = diagnosticClassOptions.value.find(
-          option => option.value === nextIncompleteClass
-        )
-        if (nextClassOption) {
-          currentClass.value = nextClassOption.value
-          handleClassChange({ value: nextClassOption.value, label: nextClassOption.label })
-        }
-      }, 1000)
+      const nextClassOption = diagnosticClassOptions.value.find(
+        option => option.value === nextIncompleteClass
+      );
+      if (nextClassOption) {
+        currentClass.value = nextClassOption.value;
+        handleClassChange({ value: nextClassOption.value, label: nextClassOption.label });
+      }
     }
   }
 }
@@ -1052,11 +1147,6 @@ const scrollToPrototype = (index) => {
   }
 }
 
-// Clean up the event listener when component is unmounted
-const beforeUnmount = () => {
-  window.removeEventListener('scroll', updateCurrentPrototype)
-}
-
 // Update the active prototype based on scroll position
 const updateCurrentPrototype = () => {
   if (prototypeRefs.value.length === 0) return
@@ -1082,8 +1172,24 @@ const updateImageIndex = (prototypeId) => {
   console.log('Updated image index for prototype:', prototypeId, currentImageIndex.value[prototypeId]);
 }
 
+// Function to move to next/previous image in carousel
+const moveCarousel = (prototypeId, direction) => {
+  const currentIndex = currentImageIndex.value[prototypeId] || 0;
+  const prototype = currentPrototypes.value.find(p => p.id === prototypeId);
+  
+  if (!prototype) return;
+  
+  const maxIndex = prototype.images.length - 1;
+  let newIndex = currentIndex + direction;
+  
+  // Ensure the index is within valid bounds
+  newIndex = Math.max(0, Math.min(newIndex, maxIndex));
+  
+  currentImageIndex.value[prototypeId] = newIndex;
+}
+
 // Marker labels for the slider (1-5)
-const markerClass = () => 'text-weight-bold'
+const markerClass = 'text-weight-bold'
 
 // Function to check if a prototype is completely rated
 const isPrototypeComplete = (index) => {
@@ -1228,6 +1334,21 @@ const isPrototypeComplete = (index) => {
 
 .crop-default {
   clip-path: inset(4% 0 0 0); /* Crop top 9% for all other images */
+}
+
+.carousel-navigation {
+  padding: 8px 0;
+  background-color: #f5f5f5;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+.carousel-page-indicator {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
 }
 
 .ecg-image-error {
