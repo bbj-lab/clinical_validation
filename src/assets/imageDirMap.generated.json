@@ -1,186 +1,22 @@
 {
   "1D_rhythm_category1": {
     "prototype_ecgs_cat1_static_constants_tune1_proj": {
-      "1AVB": [
-        "Prototype_0_ECG.png",
-        "Prototype_0_ECG_rhythm_II.png",
-        "Prototype_1_ECG.png",
-        "Prototype_1_ECG_rhythm_II.png",
-        "Prototype_2_ECG.png",
-        "Prototype_2_ECG_rhythm_II.png",
-        "Prototype_3_ECG.png",
-        "Prototype_3_ECG_rhythm_II.png",
-        "Prototype_4_ECG.png",
-        "Prototype_4_ECG_rhythm_II.png"
-      ],
-      "2AVB": [
-        "Prototype_16_ECG.png",
-        "Prototype_16_ECG_rhythm_II.png",
-        "Prototype_17_ECG.png",
-        "Prototype_17_ECG_rhythm_II.png",
-        "Prototype_18_ECG.png",
-        "Prototype_18_ECG_rhythm_II.png",
-        "Prototype_19_ECG.png",
-        "Prototype_19_ECG_rhythm_II.png"
-      ],
-      "3AVB": [
-        "Prototype_10_ECG.png",
-        "Prototype_10_ECG_rhythm_II.png",
-        "Prototype_12_ECG.png",
-        "Prototype_12_ECG_rhythm_II.png",
-        "Prototype_13_ECG.png",
-        "Prototype_13_ECG_rhythm_II.png",
-        "Prototype_14_ECG.png",
-        "Prototype_14_ECG_rhythm_II.png"
-      ],
-      "AFIB": [
-        "Prototype_25_ECG.png",
-        "Prototype_25_ECG_rhythm_II.png",
-        "Prototype_26_ECG.png",
-        "Prototype_26_ECG_rhythm_II.png",
-        "Prototype_27_ECG.png",
-        "Prototype_27_ECG_rhythm_II.png",
-        "Prototype_28_ECG.png",
-        "Prototype_28_ECG_rhythm_II.png",
-        "Prototype_29_ECG.png",
-        "Prototype_29_ECG_rhythm_II.png"
-      ],
-      "AFLT": [
-        "Prototype_60_ECG.png",
-        "Prototype_60_ECG_rhythm_II.png",
-        "Prototype_61_ECG.png",
-        "Prototype_61_ECG_rhythm_II.png",
-        "Prototype_62_ECG.png",
-        "Prototype_62_ECG_rhythm_II.png",
-        "Prototype_63_ECG.png",
-        "Prototype_63_ECG_rhythm_II.png",
-        "Prototype_64_ECG.png",
-        "Prototype_64_ECG_rhythm_II.png"
-      ],
-      "BIGU": [
-        "Prototype_55_ECG.png",
-        "Prototype_55_ECG_rhythm_II.png",
-        "Prototype_56_ECG.png",
-        "Prototype_56_ECG_rhythm_II.png",
-        "Prototype_57_ECG.png",
-        "Prototype_57_ECG_rhythm_II.png",
-        "Prototype_58_ECG.png",
-        "Prototype_58_ECG_rhythm_II.png",
-        "Prototype_59_ECG.png",
-        "Prototype_59_ECG_rhythm_II.png"
-      ],
-      "IVCD": [
-        "Prototype_5_ECG.png",
-        "Prototype_5_ECG_rhythm_II.png",
-        "Prototype_6_ECG.png",
-        "Prototype_6_ECG_rhythm_II.png",
-        "Prototype_7_ECG.png",
-        "Prototype_7_ECG_rhythm_II.png",
-        "Prototype_8_ECG.png",
-        "Prototype_8_ECG_rhythm_II.png",
-        "Prototype_9_ECG.png",
-        "Prototype_9_ECG_rhythm_II.png"
-      ],
-      "PACE": [
-        "Prototype_45_ECG.png",
-        "Prototype_45_ECG_rhythm_II.png",
-        "Prototype_46_ECG.png",
-        "Prototype_46_ECG_rhythm_II.png",
-        "Prototype_47_ECG.png",
-        "Prototype_47_ECG_rhythm_II.png",
-        "Prototype_48_ECG.png",
-        "Prototype_48_ECG_rhythm_II.png",
-        "Prototype_49_ECG.png",
-        "Prototype_49_ECG_rhythm_II.png"
-      ],
-      "PSVT": [
-        "Prototype_70_ECG.png",
-        "Prototype_70_ECG_rhythm_II.png",
-        "Prototype_73_ECG.png",
-        "Prototype_73_ECG_rhythm_II.png",
-        "Prototype_74_ECG.png",
-        "Prototype_74_ECG_rhythm_II.png"
-      ],
-      "SARRH": [
-        "Prototype_35_ECG.png",
-        "Prototype_35_ECG_rhythm_II.png",
-        "Prototype_36_ECG.png",
-        "Prototype_36_ECG_rhythm_II.png",
-        "Prototype_37_ECG.png",
-        "Prototype_37_ECG_rhythm_II.png",
-        "Prototype_38_ECG.png",
-        "Prototype_38_ECG_rhythm_II.png",
-        "Prototype_39_ECG.png",
-        "Prototype_39_ECG_rhythm_II.png"
-      ],
-      "SBRAD": [
-        "Prototype_40_ECG.png",
-        "Prototype_40_ECG_rhythm_II.png",
-        "Prototype_41_ECG.png",
-        "Prototype_41_ECG_rhythm_II.png",
-        "Prototype_42_ECG.png",
-        "Prototype_42_ECG_rhythm_II.png",
-        "Prototype_43_ECG.png",
-        "Prototype_43_ECG_rhythm_II.png",
-        "Prototype_44_ECG.png",
-        "Prototype_44_ECG_rhythm_II.png"
-      ],
-      "SR": [
-        "Prototype_20_ECG.png",
-        "Prototype_20_ECG_rhythm_II.png",
-        "Prototype_21_ECG.png",
-        "Prototype_21_ECG_rhythm_II.png",
-        "Prototype_22_ECG.png",
-        "Prototype_22_ECG_rhythm_II.png",
-        "Prototype_23_ECG.png",
-        "Prototype_23_ECG_rhythm_II.png",
-        "Prototype_24_ECG.png",
-        "Prototype_24_ECG_rhythm_II.png"
-      ],
-      "STACH": [
-        "Prototype_30_ECG.png",
-        "Prototype_30_ECG_rhythm_II.png",
-        "Prototype_31_ECG.png",
-        "Prototype_31_ECG_rhythm_II.png",
-        "Prototype_32_ECG.png",
-        "Prototype_32_ECG_rhythm_II.png",
-        "Prototype_33_ECG.png",
-        "Prototype_33_ECG_rhythm_II.png",
-        "Prototype_34_ECG.png",
-        "Prototype_34_ECG_rhythm_II.png"
-      ],
-      "SVARR": [
-        "Prototype_50_ECG.png",
-        "Prototype_50_ECG_rhythm_II.png",
-        "Prototype_51_ECG.png",
-        "Prototype_51_ECG_rhythm_II.png",
-        "Prototype_52_ECG.png",
-        "Prototype_52_ECG_rhythm_II.png",
-        "Prototype_53_ECG.png",
-        "Prototype_53_ECG_rhythm_II.png",
-        "Prototype_54_ECG.png",
-        "Prototype_54_ECG_rhythm_II.png"
-      ],
-      "SVTAC": [
-        "Prototype_65_ECG.png",
-        "Prototype_65_ECG_rhythm_II.png",
-        "Prototype_66_ECG.png",
-        "Prototype_66_ECG_rhythm_II.png",
-        "Prototype_67_ECG.png",
-        "Prototype_67_ECG_rhythm_II.png",
-        "Prototype_68_ECG.png",
-        "Prototype_68_ECG_rhythm_II.png"
-      ],
-      "TRIGU": [
-        "Prototype_75_ECG.png",
-        "Prototype_75_ECG_rhythm_II.png",
-        "Prototype_77_ECG.png",
-        "Prototype_77_ECG_rhythm_II.png",
-        "Prototype_78_ECG.png",
-        "Prototype_78_ECG_rhythm_II.png",
-        "Prototype_79_ECG.png",
-        "Prototype_79_ECG_rhythm_II.png"
-      ]
+      "1AVB": [],
+      "2AVB": [],
+      "3AVB": [],
+      "AFIB": [],
+      "AFLT": [],
+      "BIGU": [],
+      "IVCD": [],
+      "PACE": [],
+      "PSVT": [],
+      "SARRH": [],
+      "SBRAD": [],
+      "SR": [],
+      "STACH": [],
+      "SVARR": [],
+      "SVTAC": [],
+      "TRIGU": []
     }
   },
   "2D_global_category4": {
