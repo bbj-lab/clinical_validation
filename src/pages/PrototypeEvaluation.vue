@@ -623,7 +623,7 @@ const ratingCriteria = {
   },
   clarity: {
     label: 'Clarity',
-    description: 'Is the signal in the prototype interpretable and clear, or does it contain a lot of artifact?'
+    description: 'Is the signal in the prototype interpretable and clear, or does it contain a lot of noise/artifacts?'
   }
 }
 
