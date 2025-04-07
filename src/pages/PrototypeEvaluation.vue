@@ -108,6 +108,8 @@
                             image.includes('rhythm_II') ? 'crop-rhythm' : 'crop-default'
                           ]"
                           @error="handleImageError"
+                          @click="openImageDialog(image, prototype, imageIndex)"
+                          class="cursor-pointer"
                         />
                         <div v-if="imageErrors[image]" class="ecg-image-error">
                           <div class="text-h6 text-grey-8">Error loading ECG image</div>
@@ -147,6 +149,43 @@
               <q-card-section>
                 <div class="text-subtitle1 text-weight-bold q-mb-md">Rate this prototype:</div>
                 
+                <!-- Accuracy toggle first -->
+                <div class="q-mb-lg">
+                  <div class="text-subtitle2 q-mb-sm">Accuracy</div>
+                  <div class="text-caption q-mb-md">Does this prototype portray the diagnostic class correctly?</div>
+                  
+                  <div class="q-px-md q-py-sm">
+                    <q-option-group
+                      v-model="prototypeRatings[prototype.id].accuracy"
+                      :options="[
+                        { label: 'Yes', value: true },
+                        { label: 'No', value: false }
+                      ]"
+                      color="primary"
+                      inline
+                      @update:model-value="updateRating(prototype.id)"
+                    />
+                  </div>
+                </div>
+                
+                <!-- Alternate class dropdown (only shown if accuracy is set to false/0) -->
+                <div v-if="prototypeRatings[prototype.id].accuracy === false" class="q-mb-lg">
+                  <div class="text-subtitle2 q-mb-sm">Suggested Alternative Class</div>
+                  <div class="text-caption q-mb-md">What alternative diagnostic class would you suggest for this this prototype?</div>
+                  
+                  <q-select
+                    v-model="prototypeAlternateClass[prototype.id]"
+                    :options="[{ label: 'N/A - No specific suggestion', value: 'n/a' }, ...diagnosticClassOptions]"
+                    outlined
+                    emit-value
+                    map-options
+                    option-label="label"
+                    option-value="value"
+                    class="q-mb-md"
+                  />
+                </div>
+                
+                <!-- Rating criteria -->
                 <div v-for="(criterion, key) in ratingCriteria" :key="`${prototype.id}-${key}`" class="q-mb-lg">
                   <div class="text-subtitle2 q-mb-sm">{{ criterion.label }}</div>
                   <div class="text-caption q-mb-md">{{ criterion.description }}</div>
@@ -166,6 +205,7 @@
                       @change="updateRating(prototype.id)"
                       switch-label-side
                       class="q-mt-lg"
+                      :disable="prototypeRatings[prototype.id].accuracy === false && prototypeAlternateClass[prototype.id] === 'n/a'"
                     />
                     
                     <div class="rating-labels-container">
@@ -199,6 +239,7 @@
                       :icon="isPrototypeSelected(index) ? 'check_circle' : 'radio_button_unchecked'"
                       :label="isPrototypeSelected(index) ? 'Selected as Best Prototype' : 'Select as Best Prototype'"
                       @click="toggleBestPrototype(index)"
+                      :disable="prototypeRatings[prototype.id].accuracy === false"
                     />
                   </div>
                   <div class="col">
@@ -326,6 +367,55 @@
         @click="scrollToTop"
       />
     </q-page-sticky>
+
+    <!-- Image Dialog -->
+    <q-dialog v-model="showImageDialog" maximized>
+      <q-card class="image-dialog-card">
+        <q-card-section class="row items-center">
+          <div class="col">
+            <div class="text-h6">{{ imageDialogTitle }}</div>
+          </div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        
+        <q-card-section class="q-pt-none image-dialog-content">
+          <div class="full-width flex flex-center">
+            <img 
+              :src="imageDialogImage" 
+              alt="ECG Image" 
+              :class="[
+                'image-dialog-img',
+                imageDialogImage.includes('extra_segment') ? 'crop-extra-segment' : 
+                imageDialogImage.includes('rhythm_II') ? 'crop-rhythm' : 'crop-default'
+              ]"
+            />
+          </div>
+        </q-card-section>
+        
+        <q-card-section class="q-pt-none">
+          <div class="row justify-center q-gutter-md">
+            <q-btn 
+              icon="arrow_back" 
+              color="primary" 
+              :disable="currentDialogImageIndex === 0"
+              @click="navigateDialogImage(-1)"
+              rounded
+            />
+            <div class="self-center">
+              {{ currentDialogImageIndex + 1 }} / {{ dialogImageCount }}
+            </div>
+            <q-btn 
+              icon="arrow_forward" 
+              color="primary" 
+              :disable="currentDialogImageIndex >= dialogImageCount - 1"
+              @click="navigateDialogImage(1)"
+              rounded
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -533,14 +623,6 @@ const ratingCriteria = {
   clarity: {
     label: 'Clarity',
     description: 'Is the signal in the prototype interpretable and clear, or does it contain a lot of artifact?'
-  },
-  usefulness: {
-    label: 'Usefulness',
-    description: 'Would this prototype help a clinician understand what the model is learning or justify a prediction?'
-  },
-  distinctiveness: {
-    label: 'Distinctiveness',
-    description: 'Does the prototype show features specific to its assigned class, rather than patterns often present in other diagnoses?'
   }
 }
 
@@ -593,10 +675,15 @@ function initializePrototypeData(prototypes) {
       prototypeRatings.value[prototype.id] = {
         representativeness: 0,
         clarity: 0,
-        usefulness: 0,
-        distinctiveness: 0
+        accuracy: null
       }
     }
+    
+    // Initialize alternate class selections if not already set
+    if (!prototypeAlternateClass.value[prototype.id]) {
+      prototypeAlternateClass.value[prototype.id] = null;
+    }
+    
     // Initialize comments if not already set
     if (!prototypeComments.value[prototype.id]) {
       prototypeComments.value[prototype.id] = '';
@@ -624,6 +711,13 @@ function initializePrototypeData(prototypes) {
         .map(id => prototypeIdToIndex[id])
         .filter(index => index !== undefined);
     }
+    
+    // Restore accuracy settings and alternate class selections if they exist
+    if (savedData.alternateClasses) {
+      Object.keys(savedData.alternateClasses).forEach(prototypeId => {
+        prototypeAlternateClass.value[prototypeId] = savedData.alternateClasses[prototypeId];
+      });
+    }
   }
 }
 
@@ -637,11 +731,17 @@ const allPrototypesRated = computed(() => {
     
     // Check if all criteria have been rated for this prototype
     const ratings = prototypeRatings.value[prototype.id];
+    
+    // Special case: If accuracy is false and alternateClass is n/a, skip clarity and representativeness checks
+    if (ratings.accuracy === false && prototypeAlternateClass.value[prototype.id] === 'n/a') {
+      return true;
+    }
+    
     return ratings && 
       ratings.representativeness > 0 &&
       ratings.clarity > 0 &&
-      ratings.usefulness > 0 &&
-      ratings.distinctiveness > 0;
+      // Check if accuracy has been explicitly set (is not null)
+      ratings.accuracy !== null;
   });
 });
 
@@ -740,6 +840,22 @@ const toggleBadPrototype = (index) => {
 
 const updateRating = (prototypeId) => {
   console.log('Updated rating for prototype:', prototypeId, prototypeRatings.value[prototypeId]);
+  
+  // Check if accuracy was set to false
+  if (prototypeRatings.value[prototypeId].accuracy === false) {
+    // Check if the alternate class is already set to n/a
+    if (prototypeAlternateClass.value[prototypeId] === 'n/a') {
+      // Clear the representativeness and clarity ratings
+      prototypeRatings.value[prototypeId].representativeness = 0;
+      prototypeRatings.value[prototypeId].clarity = 0;
+      
+      // Find the prototype index for auto selecting "bad prototype"
+      const prototypeIndex = currentPrototypes.value.findIndex(p => p.id === prototypeId);
+      if (prototypeIndex !== -1 && !badPrototypes.value.includes(prototypeIndex)) {
+        badPrototypes.value.push(prototypeIndex);
+      }
+    }
+  }
 }
 
 const updateComments = (prototypeId) => {
@@ -820,7 +936,7 @@ onMounted(() => {
     currentReviewer.value = `Reviewer-${userCode}`
     
     // Try to load saved data from localStorage
-    const savedKey = `ecg-eval-${currentReviewer.value}`
+    const savedKey = `ecg-eval-v2-${currentReviewer.value}`
     try {
       const savedData = localStorage.getItem(savedKey)
       if (savedData) {
@@ -888,7 +1004,7 @@ const checkAllClassesCompleted = () => {
 const saveToLocalStorage = () => {
   if (!currentReviewer.value) return
   
-  const savedKey = `ecg-eval-${currentReviewer.value}`
+  const savedKey = `ecg-eval-v2-${currentReviewer.value}`
   const dataToSave = {
     reviewer: currentReviewer.value,
     evaluations: evaluationResults.value,
@@ -949,7 +1065,7 @@ const handleNextClass = async () => {
   const currentClassOption = diagnosticClassOptions.value.find(opt => opt.value === currentClass.value);
   const classDisplayName = currentClassOption ? currentClassOption.label : currentClass.value;
   
-  // Show success message with the class name
+  // Show success message with the class names
   successMessage.value = `Evaluation completed for ${classDisplayName}`;
   showSuccess.value = true;
   
@@ -1004,6 +1120,7 @@ const saveCurrentEvaluation = () => {
       badPrototypes: badPrototypes.value.map(index => currentPrototypes.value[index]?.id).filter(Boolean),
       ratings: JSON.parse(JSON.stringify(prototypeRatings.value)),
       comments: JSON.parse(JSON.stringify(prototypeComments.value)),
+      alternateClasses: JSON.parse(JSON.stringify(prototypeAlternateClass.value)),
       generalFeedback: generalFeedback.value,
       prototypes: currentPrototypes.value.map(prototype => ({
         id: prototype.id,
@@ -1036,6 +1153,12 @@ const downloadAllResults = () => {
     // Ensure we have a valid reviewer
     if (!currentReviewer.value) {
       throw new Error('No valid reviewer found')
+    }
+    
+    // Ensure the data is up-to-date by saving current evaluation if on a valid class
+    if (currentClass.value) {
+      saveCurrentEvaluation();
+      saveToLocalStorage();
     }
     
     // Prepare the complete results object
@@ -1198,13 +1321,76 @@ const isPrototypeComplete = (index) => {
   const prototype = currentPrototypes.value[index]
   const ratings = prototypeRatings.value[prototype.id]
   
+  // Special case: If accuracy is false and alternateClass is n/a, consider it complete
+  if (ratings && 
+      ratings.accuracy === false && 
+      prototypeAlternateClass.value[prototype.id] === 'n/a') {
+    return true;
+  }
+  
   // Check if all criteria have been rated
   return ratings && 
     ratings.representativeness > 0 &&
     ratings.clarity > 0 &&
-    ratings.usefulness > 0 &&
-    ratings.distinctiveness > 0
+    // Check if accuracy has been explicitly set (is not null)
+    ratings.accuracy !== null;
 }
+
+// Add new reactive state for alternate diagnostic class selections
+const prototypeAlternateClass = ref({})
+
+// Image Dialog state variables
+const showImageDialog = ref(false)
+const imageDialogTitle = ref('')
+const imageDialogImage = ref('')
+const currentDialogImageIndex = ref(0)
+const dialogImageCount = ref(0)
+const currentDialogPrototype = ref(null)
+
+const openImageDialog = (image, prototype, imageIndex) => {
+  imageDialogTitle.value = `Prototype ${prototype.diagnosticClass}: ${diagnosticDescriptions[prototype.diagnosticClass] || ''}`
+  imageDialogImage.value = image
+  currentDialogImageIndex.value = imageIndex
+  dialogImageCount.value = prototype.images.length
+  currentDialogPrototype.value = prototype
+  showImageDialog.value = true
+}
+
+const navigateDialogImage = (direction) => {
+  if (!currentDialogPrototype.value) return
+  
+  const currentIndex = currentDialogImageIndex.value
+  const maxIndex = currentDialogPrototype.value.images.length - 1
+  const newIndex = Math.max(0, Math.min(currentIndex + direction, maxIndex))
+  
+  currentDialogImageIndex.value = newIndex
+  imageDialogImage.value = currentDialogPrototype.value.images[newIndex]
+}
+
+// Add watch for alternate class changes
+watch(prototypeAlternateClass, (newVal, oldVal) => {
+  // When a prototype's alternate class changes to 'n/a' and accuracy is false, mark as bad prototype
+  Object.keys(newVal).forEach(prototypeId => {
+    if (newVal[prototypeId] === 'n/a' && 
+        prototypeRatings.value[prototypeId] && 
+        prototypeRatings.value[prototypeId].accuracy === false) {
+      
+      // Find the prototype index
+      const prototypeIndex = currentPrototypes.value.findIndex(p => p.id === prototypeId);
+      
+      // Add to bad prototypes if not already there
+      if (prototypeIndex !== -1 && !badPrototypes.value.includes(prototypeIndex)) {
+        badPrototypes.value.push(prototypeIndex);
+      }
+      
+      // Clear the representativeness and clarity ratings
+      if (prototypeRatings.value[prototypeId]) {
+        prototypeRatings.value[prototypeId].representativeness = 0;
+        prototypeRatings.value[prototypeId].clarity = 0;
+      }
+    }
+  });
+}, { deep: true });
 </script>
 
 <style scoped>
@@ -1225,20 +1411,20 @@ const isPrototypeComplete = (index) => {
 /* Carousel styling */
 :deep(.q-carousel) {
   background-color: #f5f5f5;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   height: auto;
 }
 
 :deep(.q-carousel__slide) {
-  padding: 6px;
+  padding: 0.375rem;
 }
 
 :deep(.q-carousel__navigation-icon) {
-  font-size: 10px;
+  font-size: 0.625rem;
 }
 
 :deep(.q-carousel__navigation .q-btn) {
-  margin: 4px 4px 8px;
+  margin: 0.25rem 0.25rem 0.5rem;
 }
 
 .prototype-nav {
@@ -1255,16 +1441,16 @@ const isPrototypeComplete = (index) => {
 
 /* Slider specific styles */
 :deep(.q-slider__pin-value) {
-  font-size: 14px;
+  font-size: 0.875rem;
   font-weight: bold;
 }
 
 :deep(.q-slider__marker-labels) {
-  margin-top: 8px;
+  margin-top: 0.5rem;
 }
 
 :deep(.q-slider__marker-labels-container) {
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 
 :deep(.q-slider__track-container) {
@@ -1295,9 +1481,9 @@ const isPrototypeComplete = (index) => {
 
 .label-text {
   text-align: center;
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #555;
-  max-width: 90px;
+  max-width: 5.625rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1305,8 +1491,8 @@ const isPrototypeComplete = (index) => {
 
 .ecg-image-wrapper {
   background-color: #f5f5f5;
-  border-radius: 4px;
-  padding: 6px;
+  border-radius: 0.25rem;
+  padding: 0.375rem;
   text-align: center;
   overflow: hidden;
   position: relative;
@@ -1325,28 +1511,28 @@ const isPrototypeComplete = (index) => {
 }
 
 .crop-extra-segment {
-  clip-path: inset(5% 0 0 0); /* Crop top 8% for extra_segment images */
+  clip-path: inset(5% 0 0 0); /* Using percentage is already responsive */
 }
 
 .crop-rhythm {
-  clip-path: inset(10% 0 0 0); /* Crop top 10% for rhythm_II images */
+  clip-path: inset(10% 0 0 0); /* Using percentage is already responsive */
 }
 
 .crop-default {
-  clip-path: inset(4% 0 0 0); /* Crop top 9% for all other images */
+  clip-path: inset(4% 0 0 0); /* Using percentage is already responsive */
 }
 
 .carousel-navigation {
-  padding: 8px 0;
+  padding: 0.5rem 0;
   background-color: #f5f5f5;
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
+  border-bottom-left-radius: 0.25rem;
+  border-bottom-right-radius: 0.25rem;
 }
 
 .carousel-page-indicator {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #333;
   font-weight: 500;
 }
@@ -1361,5 +1547,38 @@ const isPrototypeComplete = (index) => {
   align-items: center;
   justify-content: center;
   background-color: #f5f5f5;
+}
+
+:deep(.text-h6.text-grey-8) {
+  font-size: 1.25rem;
+}
+
+.image-dialog-card {
+  width: 80vw;
+  max-width: 800px;
+  height: 80vh;
+  max-height: 800px;
+}
+
+.image-dialog-content {
+  padding: 0;
+}
+
+.image-dialog-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  justify-content: center;
 }
 </style> 
