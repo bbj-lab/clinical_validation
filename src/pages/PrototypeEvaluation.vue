@@ -746,9 +746,18 @@ const allPrototypesRated = computed(() => {
 });
 
 const isFormValid = computed(() => {
+  // Check if all prototypes have been marked as having inaccurate class (accuracy=false)
+  const allPrototypesInaccurate = currentPrototypes.value.length > 0 &&
+    currentPrototypes.value.every(prototype => 
+      prototypeRatings.value[prototype.id]?.accuracy === false
+    );
+  
+  // If all prototypes are inaccurate, we don't need a best prototype selection
+  const bestPrototypeValid = allPrototypesInaccurate || bestPrototypes.value.length === 1;
+  
   return currentReviewer.value &&
     currentClass.value &&
-    bestPrototypes.value.length === 1 &&
+    bestPrototypeValid &&
     allPrototypesRated.value;
 })
 
@@ -1029,14 +1038,19 @@ const handleNextClass = async () => {
   // Validate all required fields
   const missingFields = [];
   
-  // Check for best prototype selection
-  if (bestPrototypes.value.length === 0) {
-    missingFields.push("a best prototype selection");
-  }
-  
   // Check if all prototypes have been rated
   if (!allPrototypesRated.value) {
     missingFields.push("ratings for all prototypes on all criteria");
+  }
+  
+  // Check if any prototypes can be selected as best (accuracy is not false)
+  const hasValidPrototypes = currentPrototypes.value.some(prototype => 
+    prototypeRatings.value[prototype.id]?.accuracy !== false
+  );
+  
+  // Only check for best prototype selection if there are valid prototypes
+  if (hasValidPrototypes && bestPrototypes.value.length === 0) {
+    missingFields.push("a best prototype selection");
   }
   
   // If any required fields are missing, show a message and return
@@ -1111,12 +1125,18 @@ const handleNextClass = async () => {
 
 const saveCurrentEvaluation = () => {
   try {
+    // Determine bestPrototype value
+    let bestPrototypeId = null;
+    if (bestPrototypes.value.length > 0) {
+      bestPrototypeId = currentPrototypes.value[bestPrototypes.value[0]]?.id;
+    }
+    
     // Create the evaluation object with all relevant data
     const evaluationData = {
       reviewer: currentReviewer.value,
       diagnosticClass: currentClass.value,
       timestamp: new Date().toISOString(),
-      bestPrototype: currentPrototypes.value[bestPrototypes.value[0]]?.id,
+      bestPrototype: bestPrototypeId,
       badPrototypes: badPrototypes.value.map(index => currentPrototypes.value[index]?.id).filter(Boolean),
       ratings: JSON.parse(JSON.stringify(prototypeRatings.value)),
       comments: JSON.parse(JSON.stringify(prototypeComments.value)),
