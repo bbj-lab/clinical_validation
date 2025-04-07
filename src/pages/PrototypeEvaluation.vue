@@ -151,7 +151,7 @@
                 
                 <!-- Accuracy toggle first -->
                 <div class="q-mb-lg">
-                  <div class="text-subtitle2 q-mb-sm">Accuracy</div>
+                  <div class="text-subtitle2 q-mb-sm">Accurate</div>
                   <div class="text-caption q-mb-md">Does this prototype portray the diagnostic class correctly?</div>
                   
                   <div class="q-px-md q-py-sm">
@@ -170,8 +170,8 @@
                 
                 <!-- Alternate class dropdown (only shown if accuracy is set to false/0) -->
                 <div v-if="prototypeRatings[prototype.id].accuracy === false" class="q-mb-lg">
-                  <div class="text-subtitle2 q-mb-sm">Suggested Alternative Class</div>
-                  <div class="text-caption q-mb-md">What alternative diagnostic class would you suggest for this this prototype?</div>
+                  <div class="text-subtitle2 q-mb-sm">Suggested Alternative Class <span class="text-negative">*</span></div>
+                  <div class="text-caption q-mb-md">What alternative diagnostic class would you suggest for this prototype?</div>
                   
                   <q-select
                     v-model="prototypeAlternateClass[prototype.id]"
@@ -182,6 +182,7 @@
                     option-label="label"
                     option-value="value"
                     class="q-mb-md"
+                    :rules="[val => !!val || 'Please select an alternative class']"
                   />
                 </div>
                 
@@ -735,6 +736,14 @@ const allPrototypesRated = computed(() => {
     // Special case: If accuracy is false and alternateClass is n/a, skip clarity and representativeness checks
     if (ratings.accuracy === false && prototypeAlternateClass.value[prototype.id] === 'n/a') {
       return true;
+    }
+    
+    // If accuracy is false, make sure an alternate class is selected
+    if (ratings.accuracy === false) {
+      // Require a selection for the alternate class
+      if (!prototypeAlternateClass.value[prototype.id]) {
+        return false;
+      }
     }
     
     return ratings && 
